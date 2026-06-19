@@ -28,8 +28,13 @@ ALLOWED_HOSTS = [
     for h in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
     if h.strip()
 ]
-# Heroku injeta o host da app; aceita qualquer subdominio herokuapp.com.
+# Aceita os dominios das hospedagens suportadas (Heroku e Render).
 ALLOWED_HOSTS.append(".herokuapp.com")
+ALLOWED_HOSTS.append(".onrender.com")
+# Render expoe o host externo nesta variavel.
+_render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if _render_host:
+    ALLOWED_HOSTS.append(_render_host)
 
 CSRF_TRUSTED_ORIGINS = [
     o.strip()
@@ -37,6 +42,7 @@ CSRF_TRUSTED_ORIGINS = [
     if o.strip()
 ]
 CSRF_TRUSTED_ORIGINS.append("https://*.herokuapp.com")
+CSRF_TRUSTED_ORIGINS.append("https://*.onrender.com")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

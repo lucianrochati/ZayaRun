@@ -9,7 +9,29 @@ simples e acessível.
 > evolução. O lado da assessoria (treinador montando planos para alunos) é a
 > próxima fase.
 
-## 🚀 Testar agora (deploy pelo celular, sem terminal)
+## 🆓 Testar de graça (Render) — recomendado
+
+O [Render](https://render.com) tem **web + Postgres gratuitos** e lê o
+`render.yaml` deste repositório. Tudo pelo celular, sem cartão:
+
+1. Crie conta em https://render.com (pode usar "Sign in with GitHub").
+2. **New +** → **Blueprint** → conecte o repositório `lucianrochati/ZayaRun`
+   (branch `claude/zayarun-app-design-4rsvdl`).
+3. O Render lê o `render.yaml` e pede só dois valores:
+   - **STRAVA_CLIENT_SECRET** → o Client Secret da Strava.
+   - **ADMIN_PASSWORD** → uma senha sua (usuário já vem como `lucian`).
+4. **Apply** e aguarde o build. Sua URL será algo como
+   `https://zayarun.onrender.com`.
+5. Na Strava (https://www.strava.com/settings/api), em **Authorization
+   Callback Domain**, coloque o host do seu app (ex.: `zayarun.onrender.com`).
+6. Abra a URL → **Entrar** (`lucian` + sua senha) → **Conectar com a Strava**.
+
+> O plano free do Render "dorme" após ~15 min sem uso (a primeira abertura
+> depois disso leva ~30–60s). O Postgres free é ótimo para testar; para uso
+> contínuo, um Postgres gratuito sem expiração como o [Neon](https://neon.tech)
+> pode ser plugado via `DATABASE_URL`.
+
+## 🚀 Alternativa: Heroku (pago, ~US$5–10/mês)
 
 [![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/lucianrochati/ZayaRun/tree/claude/zayarun-app-design-4rsvdl)
 

@@ -1,0 +1,33 @@
+# Blueprint do Render (https://render.com) — hospedagem gratuita.
+# No Render: New + > Blueprint > conecte este repositorio.
+# Voce so precisa preencher STRAVA_CLIENT_SECRET e ADMIN_PASSWORD.
+services:
+  - type: web
+    name: zayarun
+    runtime: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn zayarun.wsgi --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: STRAVA_CLIENT_ID
+        value: "253803"
+      - key: STRAVA_CLIENT_SECRET
+        sync: false          # voce digita no painel do Render (fica protegido)
+      - key: ADMIN_USERNAME
+        value: lucian
+      - key: ADMIN_PASSWORD
+        sync: false          # voce escolhe a senha no painel do Render
+      - key: DATABASE_URL
+        fromDatabase:
+          name: zayarun-db
+          property: connectionString
+
+databases:
+  - name: zayarun-db
+    plan: free
