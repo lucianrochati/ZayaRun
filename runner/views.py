@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from runner.models import Activity, StravaToken
-from runner.services import metrics, strava
+from runner.services import insights, metrics, strava
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,9 @@ def dashboard(request):
         "activities": activities[:15],
         "summary": metrics.summary(activities),
         "trend": metrics.evolution_trend(activities),
+        # PRs e insight olham o histórico completo, não o período filtrado.
+        "prs": metrics.personal_records(all_activities),
+        "insight": insights.daily_insight(all_activities, user=request.user),
         # ACWR sempre usa janelas fixas (7/28 dias), independente do filtro.
         "acwr": metrics.acwr(all_activities),
         "race": metrics.race_projections(activities),

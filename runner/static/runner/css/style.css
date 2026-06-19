@@ -144,6 +144,23 @@ h3{font-size:15px}
 .meter{height:6px;border-radius:var(--r-pill);background:var(--surface-3);margin:12px 0 6px;overflow:hidden}
 .meter > i{display:block;height:100%;border-radius:var(--r-pill);background:var(--brand-grad)}
 
+/* ---------- Insight do dia ---------- */
+.insight-card{position:relative;border-left:4px solid var(--brand);background:linear-gradient(180deg,rgba(255,90,54,.07),var(--surface) 70%)}
+.insight-card.insight-good{border-left-color:var(--good);background:linear-gradient(180deg,rgba(54,211,153,.08),var(--surface) 70%)}
+.insight-card.insight-warn{border-left-color:var(--warn);background:linear-gradient(180deg,rgba(251,191,36,.08),var(--surface) 70%)}
+.insight-text{margin:6px 0;color:var(--text);font-size:15px;line-height:1.55}
+.pill-source{color:var(--muted);background:var(--surface-2);border-color:var(--border);text-transform:lowercase;font-weight:600}
+
+/* ---------- Recordes pessoais ---------- */
+.prs{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:640px){.prs{grid-template-columns:repeat(2,1fr)}}
+.pr{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:16px 14px;text-align:center;overflow:hidden}
+.pr-new{border-color:rgba(251,191,36,.5);box-shadow:0 0 0 1px rgba(251,191,36,.25)}
+.pr-badge{position:absolute;top:8px;right:8px;font-size:11px;font-weight:700;color:#1a1205;background:var(--warn);padding:2px 7px;border-radius:var(--r-pill)}
+.pr-dist{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.pr-time{display:block;font-size:22px;font-weight:800;letter-spacing:-.02em;margin:6px 0 2px}
+.pr-sub{display:block;font-size:11px;color:var(--faint)}
+
 /* ---------- Charts ---------- */
 canvas{max-width:100%}
 

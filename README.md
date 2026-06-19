@@ -56,6 +56,25 @@ O [Render](https://render.com) tem **web + Postgres gratuitos** e lê o
 > ZayaRun pede `activity:read_all` na hora de conectar — por isso é importante
 > autorizar quando a Strava perguntar.
 
+## Insight do dia (treinador de bolso)
+
+O ZayaRun lê seus dados e **recomenda o que fazer** — não só mostra números.
+Dois modos, controlados por `INSIGHT_PROVIDER`:
+
+- `auto` (padrão): usa a **API da Claude** se `ANTHROPIC_API_KEY` estiver
+  definida; senão, cai para o motor de **regras** (sempre funciona, sem custo).
+- `rules`: sempre regras. `claude`: sempre Claude (fallback para regras em erro).
+
+Para ativar a narrativa por IA, defina no ambiente (ex.: Config Vars do Render):
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+INSIGHT_PROVIDER=auto        # ou "claude"
+INSIGHT_MODEL=claude-opus-4-8  # opcional
+```
+
+> O insight é cacheado por atleta (~1h) para não pesar no carregamento.
+
 ## O que já faz
 
 - 🔗 **Integração Strava** via OAuth (sincroniza suas atividades).

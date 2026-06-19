@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from runner.models import Activity
-from runner.services import metrics
+from runner.services import insights, metrics
 
 
 def make_run(distance_m, moving_time_s, days_ago=0, sport_type="Run", cadence=None):
@@ -123,6 +123,51 @@ class CadenceTests(TestCase):
         self.assertTrue(with_cad["has_cadence"])
         without = metrics.evolution_series([make_run(10_000, 3_000)])
         self.assertFalse(without["has_cadence"])
+
+
+class PersonalRecordsTests(TestCase):
+    def test_best_effort_per_distance(self):
+        runs = [
+            make_run(5_000, 1_500, days_ago=30),  # 5k em 25:00
+            make_run(5_100, 1_440, days_ago=2),   # 5k mais rapido (24:00) e recente
+            make_run(10_000, 3_000, days_ago=10),  # 10k
+        ]
+        prs = metrics.personal_records(runs)
+        labels = {r["label"]: r for r in prs}
+        self.assertIn("5 km", labels)
+        self.assertIn("10 km", labels)
+        # o melhor 5k deve ser o de 24:00 e marcado como recente
+        self.assertEqual(labels["5 km"]["time_str"], "24min00s")
+        self.assertTrue(labels["5 km"]["is_recent"])
+
+    def test_distance_outside_band_ignored(self):
+        prs = metrics.personal_records([make_run(3_000, 900)])  # 3k nao vira PR de 5k
+        self.assertEqual(prs, [])
+
+
+class InsightTests(TestCase):
+    def test_no_runs_returns_none(self):
+        self.assertIsNone(insights.daily_insight([]))
+
+    def test_rules_insight_mentions_load(self):
+        runs = [make_run(10_000, 3_000, days_ago=d) for d in (1, 3, 9, 16, 23)]
+        with self.settings(INSIGHT_PROVIDER="rules"):
+            insight = insights.daily_insight(runs)
+        self.assertIsNotNone(insight)
+        self.assertEqual(insight["source"], "análise")
+        self.assertTrue(insight["body"])  # tem ao menos uma frase
+
+    def test_split_fade_detected(self):
+        run = make_run(10_000, 3_000)
+        run.splits = [
+            {"pace_seconds_per_km": 290},
+            {"pace_seconds_per_km": 295},
+            {"pace_seconds_per_km": 320},
+            {"pace_seconds_per_km": 330},
+        ]
+        ctx = insights.build_context([run])
+        self.assertIsNotNone(ctx["last_run"]["fade_pct"])
+        self.assertGreater(ctx["last_run"]["fade_pct"], 4)
 
 
 class ACWRTests(TestCase):

@@ -19,6 +19,44 @@ RACE_DISTANCES = OrderedDict(
     ]
 )
 
+# Faixas de distancia (metros) para reconhecer um "esforco" de prova.
+PR_BUCKETS = OrderedDict(
+    [
+        ("5 km", (4_500, 5_500)),
+        ("10 km", (9_500, 10_700)),
+        ("21 km", (20_500, 21_600)),
+        ("42 km", (41_500, 43_200)),
+    ]
+)
+
+
+def personal_records(activities, recent_days=21):
+    """
+    Melhor esforco (menor tempo) por distancia-alvo, considerando corridas
+    com distancia dentro da faixa. Marca como recente os recordes feitos nos
+    ultimos `recent_days` dias (para destacar "Novo!").
+    """
+    runs = [a for a in only_runs(activities) if a.moving_time_s > 0]
+    cutoff = timezone.now() - timedelta(days=recent_days)
+    records = []
+    for label, (lo, hi) in PR_BUCKETS.items():
+        candidates = [a for a in runs if lo <= a.distance_m <= hi]
+        if not candidates:
+            continue
+        best = min(candidates, key=lambda a: a.moving_time_s)
+        records.append(
+            {
+                "label": label,
+                "time_str": format_duration(best.moving_time_s),
+                "pace_str": best.pace_str,
+                "distance_km": round(best.distance_km, 1),
+                "date": timezone.localtime(best.start_date).strftime("%d/%m/%Y"),
+                "activity_id": best.pk,
+                "is_recent": best.start_date >= cutoff,
+            }
+        )
+    return records
+
 
 # Periodos de filtro (em dias). None = histórico completo.
 PERIODS = OrderedDict(

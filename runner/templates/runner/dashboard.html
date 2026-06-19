@@ -49,6 +49,17 @@
     {% endfor %}
   </div>
 
+  <!-- Insight do dia -->
+  {% if insight %}
+  <article class="card insight-card insight-{{ insight.tone }}">
+    <div class="card-head">
+      <h3>💡 {{ insight.headline }}</h3>
+      <span class="pill pill-source">{{ insight.source }}</span>
+    </div>
+    {% for line in insight.body %}<p class="insight-text">{{ line }}</p>{% endfor %}
+  </article>
+  {% endif %}
+
   <!-- KPIs -->
   <section class="kpis">
     <article class="kpi"><span class="kpi-label">Distância total</span>
@@ -66,6 +77,21 @@
       <span class="kpi-value">{{ summary.avg_cadence_spm }}<small>spm</small></span></article>
     {% endif %}
   </section>
+
+  <!-- Recordes pessoais -->
+  {% if prs %}
+  <p class="section-label">Recordes pessoais</p>
+  <section class="prs">
+    {% for r in prs %}
+    <article class="pr {% if r.is_recent %}pr-new{% endif %}">
+      {% if r.is_recent %}<span class="pr-badge">🏅 Novo</span>{% endif %}
+      <span class="pr-dist">{{ r.label }}</span>
+      <span class="pr-time">{{ r.time_str }}</span>
+      <span class="pr-sub">{{ r.pace_str }}/km · {{ r.date }}</span>
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
 
   <!-- Insights -->
   {% if trend or acwr %}

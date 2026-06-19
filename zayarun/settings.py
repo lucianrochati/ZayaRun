@@ -128,6 +128,13 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
+# --- Insight do dia ---
+# Provider: "auto" (Claude se ANTHROPIC_API_KEY existir, senao regras),
+# "rules" (sempre regras) ou "claude" (sempre Claude, fallback regras).
+INSIGHT_PROVIDER = os.environ.get("INSIGHT_PROVIDER", "auto")
+INSIGHT_MODEL = os.environ.get("INSIGHT_MODEL", "claude-opus-4-8")
+# A chave da Claude e lida do ambiente pelo SDK: ANTHROPIC_API_KEY
+
 # --- Integracao Strava ---
 STRAVA_CLIENT_ID = os.environ.get("STRAVA_CLIENT_ID", "")
 STRAVA_CLIENT_SECRET = os.environ.get("STRAVA_CLIENT_SECRET", "")
