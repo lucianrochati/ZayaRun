@@ -4,140 +4,127 @@
 
 {% if not has_strava %}
   <div class="card hero">
-    <h1>Conecte sua Strava e comece a evoluir</h1>
-    <p class="muted">
-      O ZayaRun puxa seus treinos da Strava e mostra pace, volume, evolução
-      e projeção de provas — do jeito do treinador.
-    </p>
+    <svg class="hero-mark"><use href="#zaya-mark"/></svg>
+    <h1>Evolua com dados, não com achismo</h1>
+    <p>Conecte sua Strava e o ZayaRun transforma seus treinos em pace, volume,
+       evolução e projeção de provas — do jeito do treinador.</p>
+    <ul class="feature-list">
+      <li><span class="tick">✓</span><span><b>Evolução real</b> de pace, distância e cadência</span></li>
+      <li><span class="tick">✓</span><span><b>Carga de treino (ACWR)</b> para evitar lesão</span></li>
+      <li><span class="tick">✓</span><span><b>Projeção de provas</b> de 5k à maratona</span></li>
+    </ul>
     {% if strava_configured %}
       <a class="btn btn-strava" href="{% url 'strava_connect' %}">Conectar com a Strava</a>
     {% else %}
-      <p class="warn">
-        Integração ainda não configurada. Defina <code>STRAVA_CLIENT_ID</code> e
-        <code>STRAVA_CLIENT_SECRET</code> no ambiente.
-      </p>
+      <p class="muted small">Integração não configurada: defina <code>STRAVA_CLIENT_ID</code>
+         e <code>STRAVA_CLIENT_SECRET</code> no ambiente.</p>
     {% endif %}
-    <p class="muted small">Garmin em breve (aguardando aprovação da API).</p>
+    <p class="muted small" style="margin-top:14px">Garmin em breve · aguardando aprovação da API.</p>
   </div>
 {% else %}
 
-  <div class="row-between">
-    <h1>Seu painel</h1>
-    <div class="actions">
+  <div class="page-head">
+    <div>
+      <p class="eyebrow">Painel</p>
+      <h1>Sua evolução</h1>
+    </div>
+    <div class="page-actions">
       <form action="{% url 'strava_sync' %}" method="post" class="inline">
         {% csrf_token %}
-        <button class="btn btn-sm" type="submit">↻ Sincronizar</button>
+        <button class="btn btn-sm" type="submit" title="Sincronizar treinos">↻ Sincronizar</button>
       </form>
       <form action="{% url 'strava_disconnect' %}" method="post" class="inline"
             onsubmit="return confirm('Desconectar a Strava?');">
         {% csrf_token %}
-        <button class="btn btn-sm btn-ghost" type="submit">desconectar</button>
+        <button class="btn btn-sm btn-ghost icon-btn" type="submit" title="Desconectar">⏏</button>
       </form>
     </div>
   </div>
 
-  <!-- Seletor de periodo -->
-  <nav class="periods" aria-label="Periodo">
+  <!-- Período -->
+  <div class="segmented" role="tablist" aria-label="Período">
     {% for key, label in period_choices %}
-      <a class="chip {% if key == period %}chip-on{% endif %}"
-         href="?period={{ key }}">{{ label }}</a>
+      <a class="seg {% if key == period %}seg-on{% endif %}" href="?period={{ key }}"
+         role="tab" aria-selected="{% if key == period %}true{% else %}false{% endif %}">{{ label }}</a>
     {% endfor %}
-  </nav>
+  </div>
 
-  <!-- Cartoes de resumo -->
-  <section class="stats">
-    <div class="stat">
-      <span class="stat-val">{{ summary.total_distance_km }}<i>km</i></span>
-      <span class="stat-lbl">Distância total</span>
-    </div>
-    <div class="stat">
-      <span class="stat-val">{{ summary.avg_pace_str }}<i>/km</i></span>
-      <span class="stat-lbl">Pace médio</span>
-    </div>
-    <div class="stat">
-      <span class="stat-val">{{ summary.count }}</span>
-      <span class="stat-lbl">Corridas</span>
-    </div>
-    <div class="stat">
-      <span class="stat-val">{{ summary.total_elevation_m }}<i>m</i></span>
-      <span class="stat-lbl">Elevação</span>
-    </div>
-    <div class="stat">
-      <span class="stat-val">{{ summary.avg_distance_km }}<i>km</i></span>
-      <span class="stat-lbl">Média por corrida</span>
-    </div>
+  <!-- KPIs -->
+  <section class="kpis">
+    <article class="kpi"><span class="kpi-label">Distância total</span>
+      <span class="kpi-value">{{ summary.total_distance_km }}<small>km</small></span></article>
+    <article class="kpi"><span class="kpi-label">Pace médio</span>
+      <span class="kpi-value">{{ summary.avg_pace_str }}<small>/km</small></span></article>
+    <article class="kpi"><span class="kpi-label">Corridas</span>
+      <span class="kpi-value">{{ summary.count }}</span></article>
+    <article class="kpi"><span class="kpi-label">Elevação</span>
+      <span class="kpi-value">{{ summary.total_elevation_m }}<small>m</small></span></article>
+    <article class="kpi"><span class="kpi-label">Média por corrida</span>
+      <span class="kpi-value">{{ summary.avg_distance_km }}<small>km</small></span></article>
     {% if summary.avg_cadence_spm %}
-    <div class="stat">
-      <span class="stat-val">{{ summary.avg_cadence_spm }}<i>spm</i></span>
-      <span class="stat-lbl">Cadência média</span>
-    </div>
+    <article class="kpi"><span class="kpi-label">Cadência média</span>
+      <span class="kpi-value">{{ summary.avg_cadence_spm }}<small>spm</small></span></article>
     {% endif %}
   </section>
 
-  <!-- Evolucao + carga -->
+  <!-- Insights -->
+  {% if trend or acwr %}
   <div class="grid-2">
     {% if trend %}
-    <div class="card">
-      <h2>Evolução do pace</h2>
-      {% if trend.improved %}
-        <p class="big-good">▼ {{ trend.delta_str }}/km mais rápido</p>
-      {% else %}
-        <p class="big-bad">▲ {{ trend.delta_str }}/km mais lento</p>
-      {% endif %}
-      <p class="muted small">
-        Últimas corridas em {{ trend.recent_pace_str }}/km
-        vs {{ trend.previous_pace_str }}/km antes.
+    <article class="card">
+      <div class="card-head"><h3>Evolução do pace</h3>
+        <span class="pill {% if trend.improved %}pill-ideal{% else %}pill-atencao{% endif %}">
+          {% if trend.improved %}Melhorando{% else %}Atenção{% endif %}</span>
+      </div>
+      <p class="insight-value {% if trend.improved %}delta-good{% else %}delta-bad{% endif %}">
+        {% if trend.improved %}▼{% else %}▲{% endif %} {{ trend.delta_str }}<small style="font-size:14px"> /km</small>
       </p>
-    </div>
+      <p class="card-sub">Recentes em {{ trend.recent_pace_str }}/km vs {{ trend.previous_pace_str }}/km antes.</p>
+    </article>
     {% endif %}
-
     {% if acwr %}
-    <div class="card">
-      <h2>Carga de treino (ACWR)</h2>
-      <p class="big acwr-{{ acwr.zone }}">{{ acwr.ratio }}</p>
-      <p class="muted small">{{ acwr.label }}</p>
-      <p class="muted small">
-        Aguda 7d: {{ acwr.acute_km }} km · Crônica/sem: {{ acwr.chronic_week_km }} km
-      </p>
-    </div>
+    <article class="card">
+      <div class="card-head"><h3>Carga de treino</h3>
+        <span class="pill pill-{{ acwr.zone }}">{{ acwr.status }}</span>
+      </div>
+      <p class="insight-value acwr-{{ acwr.zone }}">{{ acwr.ratio }}<small style="font-size:14px"> ACWR</small></p>
+      <div class="meter"><i style="width:{{ acwr.bar_pct }}%"></i></div>
+      <p class="card-sub">{{ acwr.label }} · aguda {{ acwr.acute_km }} km / crônica {{ acwr.chronic_week_km }} km</p>
+    </article>
     {% endif %}
   </div>
+  {% endif %}
 
-  <!-- Graficos -->
+  <!-- Análise -->
+  <p class="section-label">Análise</p>
   <div class="card">
-    <h2>Volume (km)</h2>
+    <div class="card-head"><h2>Volume</h2><span class="muted small">km</span></div>
     <canvas id="volumeChart" height="120"></canvas>
   </div>
 
   {% if evo_labels != "[]" %}
   <div class="card">
-    <h2>Evolução do pace</h2>
-    <p class="muted small">Mais baixo = mais rápido.</p>
+    <div class="card-head"><h2>Evolução do pace</h2><span class="muted small">menor = mais rápido</span></div>
     <canvas id="paceChart" height="120"></canvas>
   </div>
-
   <div class="card">
-    <h2>Evolução da distância</h2>
+    <div class="card-head"><h2>Evolução da distância</h2><span class="muted small">km</span></div>
     <canvas id="distanceChart" height="120"></canvas>
   </div>
-
   {% if evo_has_cadence %}
   <div class="card">
-    <h2>Evolução da cadência (spm)</h2>
-    <p class="muted small">Referência comum em corrida: ~170–180 passos/min.</p>
+    <div class="card-head"><h2>Evolução da cadência</h2><span class="muted small">~170–180 spm</span></div>
     <canvas id="cadenceChart" height="120"></canvas>
   </div>
   {% endif %}
   {% endif %}
 
-  <!-- Projecao de provas -->
+  <!-- Projeção de provas -->
   {% if race %}
+  <p class="section-label">Projeção de provas</p>
   <div class="card">
-    <h2>Projeção de provas</h2>
-    <p class="muted small">
-      Base: melhor corrida de {{ race.base_distance_km }} km a {{ race.base_pace_str }}/km
-      (fórmula de Riegel).
-    </p>
+    <p class="card-sub" style="margin:0 0 8px">
+      Base: melhor corrida de {{ race.base_distance_km }} km a {{ race.base_pace_str }}/km (fórmula de Riegel).</p>
     <table class="tbl">
       <thead><tr><th>Prova</th><th>Tempo estimado</th><th>Pace</th></tr></thead>
       <tbody>
@@ -149,26 +136,24 @@
   </div>
   {% endif %}
 
-  <!-- Lista de atividades -->
+  <!-- Treinos -->
+  <p class="section-label">Treinos recentes</p>
   <div class="card">
-    <h2>Treinos recentes</h2>
     {% if activities %}
       <ul class="act-list">
         {% for a in activities %}
-          <li>
-            <a href="{% url 'activity_detail' a.pk %}">
+          <li><a class="act-row" href="{% url 'activity_detail' a.pk %}">
+            <span class="act-ico">▲</span>
+            <span class="act-body">
               <span class="act-name">{{ a.name|default:a.sport_type }}</span>
-              <span class="act-meta">
-                {{ a.start_date|date:"d/m/Y" }} ·
-                {{ a.distance_km|floatformat:1 }} km ·
-                {{ a.pace_str }}/km · {{ a.duration_str }}
-              </span>
-            </a>
-          </li>
+              <span class="act-meta">{{ a.start_date|date:"d/m/Y" }} · {{ a.distance_km|floatformat:1 }} km · {{ a.pace_str }}/km · {{ a.duration_str }}</span>
+            </span>
+            <span class="act-chev">›</span>
+          </a></li>
         {% endfor %}
       </ul>
     {% else %}
-      <p class="muted">Nenhum treino ainda. Clique em “Sincronizar”.</p>
+      <p class="muted">Nenhum treino neste período. Toque em “Sincronizar” ou amplie o filtro.</p>
     {% endif %}
   </div>
 {% endif %}
@@ -178,60 +163,56 @@
 {% if has_strava %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-  const accent = '#fc4c02', blue = '#3b82f6', green = '#22c55e';
-  const grid = 'rgba(255,255,255,.06)';
-  Chart.defaults.color = '#93a4bd';
-  Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif";
+  const BRAND = '#FF6A33', BLUE = '#5B8DEF', MINT = '#36D399';
+  const grid = 'rgba(148,163,184,.10)';
+  Chart.defaults.color = '#93A1B8';
+  Chart.defaults.font.family = "Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif";
+  Chart.defaults.font.size = 12;
 
-  function lineChart(elId, labels, data, color, fmt) {
+  function gradientFill(ctx, hex){
+    const g = ctx.createLinearGradient(0,0,0,160);
+    g.addColorStop(0, hex+'55'); g.addColorStop(1, hex+'00');
+    return g;
+  }
+  function lineChart(elId, labels, data, color, fmt){
     const el = document.getElementById(elId);
-    if (!el || !labels.length) return;
+    if(!el || !labels.length) return;
     new Chart(el, {
-      type: 'line',
-      data: { labels: labels, datasets: [{ data: data, borderColor: color,
-        backgroundColor: color.replace(')', ',.12)').replace('rgb', 'rgba'),
-        tension: .3, fill: true, pointRadius: 3, spanGaps: true }] },
-      options: {
-        plugins: { legend: { display: false },
-          tooltip: { callbacks: { label: (c) => fmt.tip(c.parsed.y) } } },
-        scales: {
-          x: { grid: { color: grid } },
-          y: Object.assign({ grid: { color: grid } }, fmt.y || {})
-        }
-      }
+      type:'line',
+      data:{ labels, datasets:[{ data, borderColor:color, borderWidth:2.5,
+        backgroundColor: gradientFill(el.getContext('2d'), color),
+        tension:.35, fill:true, pointRadius:0, pointHoverRadius:5,
+        pointBackgroundColor:color, spanGaps:true }] },
+      options:{ maintainAspectRatio:true,
+        plugins:{ legend:{display:false},
+          tooltip:{ backgroundColor:'#1A2336', borderColor:'rgba(148,163,184,.2)', borderWidth:1,
+            padding:10, displayColors:false, callbacks:{ label:(c)=>fmt.tip(c.parsed.y) } } },
+        scales:{ x:{ grid:{color:grid}, border:{display:false} },
+          y: Object.assign({ grid:{color:grid}, border:{display:false} }, fmt.y||{}) } }
     });
   }
-
-  const paceTick = (v) => { const m = Math.floor(v/60), s = Math.round(v%60);
-    return m + ':' + String(s).padStart(2,'0'); };
+  const paceTick = (v)=>{ const m=Math.floor(v/60), s=Math.round(v%60); return m+':'+String(s).padStart(2,'0'); };
 
   // Volume (barras)
   const volEl = document.getElementById('volumeChart');
   new Chart(volEl, {
-    type: 'bar',
-    data: { labels: {{ volume_labels|safe }}, datasets: [{ data: {{ volume_km|safe }},
-      backgroundColor: blue, borderRadius: 6 }] },
-    options: { plugins: { legend: { display: false },
-      tooltip: { callbacks: { label: (c) => c.parsed.y + ' km' } } },
-      scales: { x: { grid: { color: grid } },
-        y: { beginAtZero: true, grid: { color: grid } } } }
+    type:'bar',
+    data:{ labels:{{ volume_labels|safe }}, datasets:[{ data:{{ volume_km|safe }},
+      backgroundColor:BLUE, borderRadius:6, maxBarThickness:34 }] },
+    options:{ plugins:{ legend:{display:false},
+      tooltip:{ backgroundColor:'#1A2336', padding:10, displayColors:false,
+        callbacks:{ label:(c)=>c.parsed.y+' km' } } },
+      scales:{ x:{ grid:{display:false}, border:{display:false} },
+        y:{ beginAtZero:true, grid:{color:grid}, border:{display:false} } } }
   });
 
   const evoLabels = {{ evo_labels|safe }};
-  const evoStr = {{ evo_paces_str|safe }};
-
-  // Pace (eixo invertido: menor em cima = melhor)
-  lineChart('paceChart', evoLabels, {{ evo_paces|safe }}, 'rgb(252,76,2)',
-    { tip: (v) => 'Pace ' + paceTick(v) + '/km',
-      y: { reverse: true, ticks: { callback: paceTick } } });
-
-  // Distancia
-  lineChart('distanceChart', evoLabels, {{ evo_distances|safe }}, 'rgb(59,130,246)',
-    { tip: (v) => v + ' km', y: { beginAtZero: true } });
-
-  // Cadencia
-  lineChart('cadenceChart', evoLabels, {{ evo_cadences|safe }}, 'rgb(34,197,94)',
-    { tip: (v) => v + ' spm' });
+  lineChart('paceChart', evoLabels, {{ evo_paces|safe }}, BRAND,
+    { tip:(v)=>'Pace '+paceTick(v)+'/km', y:{ reverse:true, ticks:{ callback:paceTick } } });
+  lineChart('distanceChart', evoLabels, {{ evo_distances|safe }}, BLUE,
+    { tip:(v)=>v+' km', y:{ beginAtZero:true } });
+  lineChart('cadenceChart', evoLabels, {{ evo_cadences|safe }}, MINT,
+    { tip:(v)=>v+' spm' });
 </script>
 {% endif %}
 {% endblock %}

@@ -1,41 +1,37 @@
 {% extends "runner/base.html" %}
 {% block title %}{{ activity.name }} · ZayaRun{% endblock %}
 {% block content %}
-<p><a class="link-btn" href="{% url 'dashboard' %}">← voltar</a></p>
+<p style="margin-top:4px"><a class="link-btn" href="{% url 'dashboard' %}">← Voltar ao painel</a></p>
 
-<div class="card">
-  <h1>{{ activity.name|default:activity.sport_type }}</h1>
-  <p class="muted">{{ activity.start_date|date:"l, d/m/Y H:i" }} · {{ activity.get_source_display }}</p>
-
-  <section class="stats">
-    <div class="stat">
-      <span class="stat-val">{{ activity.distance_km|floatformat:2 }}<i>km</i></span>
-      <span class="stat-lbl">Distância</span>
-    </div>
-    <div class="stat">
-      <span class="stat-val">{{ activity.pace_str }}<i>/km</i></span>
-      <span class="stat-lbl">Pace médio</span>
-    </div>
-    <div class="stat">
-      <span class="stat-val">{{ activity.duration_str }}</span>
-      <span class="stat-lbl">Tempo</span>
-    </div>
-    <div class="stat">
-      <span class="stat-val">{{ activity.total_elevation_gain_m|floatformat:0 }}<i>m</i></span>
-      <span class="stat-lbl">Elevação</span>
-    </div>
-    {% if activity.average_heartrate %}
-    <div class="stat">
-      <span class="stat-val">{{ activity.average_heartrate|floatformat:0 }}<i>bpm</i></span>
-      <span class="stat-lbl">FC média</span>
-    </div>
-    {% endif %}
-  </section>
+<div class="page-head">
+  <div>
+    <p class="eyebrow">{{ activity.get_source_display }} · {{ activity.start_date|date:"d/m/Y H:i" }}</p>
+    <h1>{{ activity.name|default:activity.sport_type }}</h1>
+  </div>
 </div>
 
+<section class="kpis" style="margin-top:16px">
+  <article class="kpi"><span class="kpi-label">Distância</span>
+    <span class="kpi-value">{{ activity.distance_km|floatformat:2 }}<small>km</small></span></article>
+  <article class="kpi"><span class="kpi-label">Pace médio</span>
+    <span class="kpi-value">{{ activity.pace_str }}<small>/km</small></span></article>
+  <article class="kpi"><span class="kpi-label">Tempo</span>
+    <span class="kpi-value">{{ activity.duration_str }}</span></article>
+  <article class="kpi"><span class="kpi-label">Elevação</span>
+    <span class="kpi-value">{{ activity.total_elevation_gain_m|floatformat:0 }}<small>m</small></span></article>
+  {% if activity.average_heartrate %}
+  <article class="kpi"><span class="kpi-label">FC média</span>
+    <span class="kpi-value">{{ activity.average_heartrate|floatformat:0 }}<small>bpm</small></span></article>
+  {% endif %}
+  {% if activity.cadence_spm %}
+  <article class="kpi"><span class="kpi-label">Cadência</span>
+    <span class="kpi-value">{{ activity.cadence_spm }}<small>spm</small></span></article>
+  {% endif %}
+</section>
+
 {% if activity.splits %}
+<p class="section-label">Parciais por km</p>
 <div class="card">
-  <h2>Parciais por km</h2>
   <table class="tbl">
     <thead><tr><th>Km</th><th>Pace</th><th>Desnível</th>{% if activity.average_heartrate %}<th>FC</th>{% endif %}</tr></thead>
     <tbody>
@@ -49,9 +45,9 @@
       {% endfor %}
     </tbody>
   </table>
-  <p class="muted small">Parciais fornecidas pela Strava (a cada 1 km).</p>
+  <p class="card-sub">Parciais fornecidas pela Strava (a cada 1 km).</p>
 </div>
 {% else %}
-<p class="muted">Sem parciais detalhadas para este treino.</p>
+<div class="card"><p class="muted" style="margin:0">Sem parciais detalhadas para este treino.</p></div>
 {% endif %}
 {% endblock %}

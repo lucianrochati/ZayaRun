@@ -4,24 +4,41 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1f3a">
+  <meta name="theme-color" content="#0B0F1A">
   <title>{% block title %}ZayaRun{% endblock %}</title>
+
+  <link rel="icon" href="{% static 'runner/img/favicon.svg' %}" type="image/svg+xml">
+  <link rel="icon" href="{% static 'runner/img/favicon-32.png' %}" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="{% static 'runner/img/apple-touch-icon.png' %}">
+  <link rel="manifest" href="{% static 'runner/manifest.webmanifest' %}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ZayaRun">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'runner/css/style.css' %}">
 </head>
 <body>
+  {% include "runner/_logo_symbol.html" %}
+
   <header class="topbar">
-    <a href="{% url 'dashboard' %}" class="brand">
-      <span class="brand-mark">▲</span> Zaya<strong>Run</strong>
+    <a href="{% url 'dashboard' %}" class="brand" aria-label="ZayaRun">
+      <svg width="30" height="30"><use href="#zaya-mark"/></svg>
+      <span><span class="b-thin">Zaya</span><span class="b-bold">Run</span></span>
     </a>
     <nav>
       {% if user.is_authenticated %}
-        <span class="who">{{ user.username }}</span>
+        <span class="who">
+          <span class="avatar">{{ user.username|slice:":1" }}</span>
+        </span>
         <form action="{% url 'logout' %}" method="post" class="inline">
           {% csrf_token %}
-          <button class="link-btn" type="submit">sair</button>
+          <button class="link-btn" type="submit">Sair</button>
         </form>
       {% else %}
-        <a href="{% url 'login' %}" class="link-btn">entrar</a>
+        <a href="{% url 'login' %}" class="link-btn">Entrar</a>
       {% endif %}
     </nav>
   </header>
@@ -39,7 +56,7 @@
   </main>
 
   <footer class="foot">
-    ZayaRun · assessoria de corrida · feito pra acelerar sua evolução
+    ZayaRun · sua assessoria de corrida · evolua com dados
   </footer>
   {% block scripts %}{% endblock %}
 </body>

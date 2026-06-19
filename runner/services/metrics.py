@@ -250,19 +250,21 @@ def acwr(activities):
         return None
     ratio = last7 / chronic_week
     if ratio < 0.8:
-        zone, label = "baixa", "Carga baixa (pode progredir)"
+        zone, status, label = "baixa", "Baixa", "Carga baixa — dá pra progredir"
     elif ratio <= 1.3:
-        zone, label = "ideal", "Zona ideal de progressao"
+        zone, status, label = "ideal", "Ideal", "Zona ideal de progressão"
     elif ratio <= 1.5:
-        zone, label = "atencao", "Atencao: subindo rapido"
+        zone, status, label = "atencao", "Atenção", "Subindo rápido — cuidado"
     else:
-        zone, label = "risco", "Risco de lesao: carga alta demais"
+        zone, status, label = "risco", "Risco", "Carga alta demais — risco de lesão"
     return {
         "ratio": round(ratio, 2),
         "acute_km": round(last7, 1),
         "chronic_week_km": round(chronic_week, 1),
         "zone": zone,
+        "status": status,
         "label": label,
+        "bar_pct": min(round(ratio / 1.5 * 100), 100),
     }
 
 
