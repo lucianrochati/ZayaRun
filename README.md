@@ -9,6 +9,31 @@ simples e acessível.
 > evolução. O lado da assessoria (treinador montando planos para alunos) é a
 > próxima fase.
 
+## 🚀 Testar agora (deploy pelo celular, sem terminal)
+
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/lucianrochati/ZayaRun/tree/claude/zayarun-app-design-4rsvdl)
+
+1. Toque no botão acima e faça login no Heroku.
+2. Em **App name**, escolha um nome (ex.: `zayarun-lucian`) — guarde o domínio
+   `zayarun-lucian.herokuapp.com`.
+3. Preencha:
+   - **STRAVA_CLIENT_SECRET** → cole o Client Secret da Strava.
+   - **ADMIN_PASSWORD** → escolha uma senha de acesso (usuário já vem como `lucian`).
+   - (Client ID `253803` já vem preenchido.)
+4. Toque em **Deploy app** e aguarde.
+5. Na Strava (https://www.strava.com/settings/api), em **Authorization Callback
+   Domain**, coloque o domínio do seu app (ex.: `zayarun-lucian.herokuapp.com`).
+6. Abra o app → **Entrar** (`lucian` + sua senha) → **Conectar com a Strava**.
+   Na tela da Strava, **autorize ver suas atividades**.
+
+> 🔒 **Segurança:** o Client Secret é digitado direto no Heroku e **nunca fica no
+> código**. Se ele já foi exposto (ex.: em um print), use **"Gerar novo segredo do
+> cliente"** na Strava depois de testar.
+
+> ℹ️ O escopo `read` que aparece no painel da Strava é só do token de exemplo. O
+> ZayaRun pede `activity:read_all` na hora de conectar — por isso é importante
+> autorizar quando a Strava perguntar.
+
 ## O que já faz
 
 - 🔗 **Integração Strava** via OAuth (sincroniza suas atividades).
@@ -62,13 +87,15 @@ Acesse http://127.0.0.1:8000/ , faça login e clique em **Conectar com a Strava*
 heroku create
 heroku addons:create heroku-postgresql:essential-0
 heroku config:set SECRET_KEY=... DEBUG=False \
-  STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=... \
-  STRAVA_REDIRECT_URI=https://SEU-APP.herokuapp.com/strava/callback/
+  STRAVA_CLIENT_ID=253803 STRAVA_CLIENT_SECRET=... \
+  ADMIN_USERNAME=lucian ADMIN_PASSWORD=...
 git push heroku main
-heroku run python manage.py createsuperuser
 ```
 
-(No painel da Strava, ajuste o callback domain para `SEU-APP.herokuapp.com`.)
+O usuário de login é criado automaticamente no deploy (comando `createsu`,
+a partir de `ADMIN_USERNAME`/`ADMIN_PASSWORD`). A URL de callback é deduzida
+do próprio domínio — só ajuste o **callback domain** na Strava para
+`SEU-APP.herokuapp.com`.
 
 ## Testes
 

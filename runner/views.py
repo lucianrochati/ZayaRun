@@ -2,9 +2,11 @@
 import json
 import logging
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from runner.models import Activity, StravaToken
@@ -49,7 +51,14 @@ def strava_connect(request):
             "STRAVA_CLIENT_SECRET nas variaveis de ambiente.",
         )
         return redirect("dashboard")
-    return redirect(strava.build_authorize_url(state=str(request.user.pk)))
+    # URL de callback deduzida do proprio host (funciona em qualquer dominio
+    # sem configuracao extra). Forca https fora do modo DEBUG (Heroku).
+    redirect_uri = request.build_absolute_uri(reverse("strava_callback"))
+    if not settings.DEBUG:
+        redirect_uri = redirect_uri.replace("http://", "https://", 1)
+    return redirect(
+        strava.build_authorize_url(redirect_uri=redirect_uri, state=str(request.user.pk))
+    )
 
 
 @login_required

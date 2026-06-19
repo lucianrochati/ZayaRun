@@ -35,11 +35,16 @@ def is_configured():
     return bool(settings.STRAVA_CLIENT_ID and settings.STRAVA_CLIENT_SECRET)
 
 
-def build_authorize_url(state=""):
-    """Monta a URL para o usuario autorizar o app na Strava."""
+def build_authorize_url(redirect_uri=None, state=""):
+    """Monta a URL para o usuario autorizar o app na Strava.
+
+    `redirect_uri` pode ser deduzido dinamicamente do host da requisicao
+    (ver runner.views.strava_connect); se nao informado, usa o valor de
+    settings.STRAVA_REDIRECT_URI.
+    """
     params = {
         "client_id": settings.STRAVA_CLIENT_ID,
-        "redirect_uri": settings.STRAVA_REDIRECT_URI,
+        "redirect_uri": redirect_uri or settings.STRAVA_REDIRECT_URI,
         "response_type": "code",
         "approval_prompt": "auto",
         "scope": "read,activity:read_all",

@@ -1,0 +1,42 @@
+{
+  "name": "ZayaRun",
+  "description": "Assessoria de corrida: conecte sua Strava e acompanhe pace, volume, evolucao e projecao de provas.",
+  "repository": "https://github.com/lucianrochati/ZayaRun",
+  "keywords": ["django", "corrida", "running", "strava", "trail"],
+  "stack": "heroku-22",
+  "buildpacks": [
+    { "url": "heroku/python" }
+  ],
+  "formation": {
+    "web": { "quantity": 1, "size": "basic" }
+  },
+  "addons": [
+    "heroku-postgresql:essential-0"
+  ],
+  "env": {
+    "SECRET_KEY": {
+      "description": "Chave secreta do Django (gerada automaticamente).",
+      "generator": "secret"
+    },
+    "DEBUG": {
+      "description": "Mantenha False em producao.",
+      "value": "False"
+    },
+    "STRAVA_CLIENT_ID": {
+      "description": "Client ID do seu app na Strava.",
+      "value": "253803"
+    },
+    "STRAVA_CLIENT_SECRET": {
+      "description": "Client Secret do seu app na Strava (cole aqui; fica protegido no Heroku).",
+      "required": true
+    },
+    "ADMIN_USERNAME": {
+      "description": "Usuario para entrar no ZayaRun.",
+      "value": "lucian"
+    },
+    "ADMIN_PASSWORD": {
+      "description": "Senha para entrar no ZayaRun (escolha uma).",
+      "required": true
+    }
+  }
+}
