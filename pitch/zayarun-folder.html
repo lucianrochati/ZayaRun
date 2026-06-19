@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZayaRun · folder</title>
+<style>
+  :root{--bg:#0B0F1A;--surface:#131A28;--card:#1A2336;--border:rgba(148,163,184,.14);
+        --text:#EAF0FA;--muted:#93A1B8;--faint:#5E6B82;--brand:#FF6A33;--brand2:#F03E17;--good:#36D399}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;
+       background:#05070d;color:var(--text);line-height:1.55;padding:24px}
+  .sheet{max-width:720px;margin:0 auto;background:
+       radial-gradient(900px 400px at 90% -8%,rgba(255,90,54,.14),transparent 60%),
+       radial-gradient(700px 360px at -10% 4%,rgba(91,141,239,.10),transparent 55%),var(--bg);
+       border:1px solid var(--border);border-radius:28px;padding:48px 44px;
+       box-shadow:0 30px 80px -30px rgba(0,0,0,.7)}
+  .brand{display:flex;align-items:center;gap:14px;margin-bottom:34px}
+  .brand svg{width:52px;height:52px;border-radius:13px}
+  .brand b{font-size:30px;font-weight:800;letter-spacing:-.02em}
+  .brand b .o{color:var(--brand)}
+  h1{font-size:40px;line-height:1.12;letter-spacing:-.03em;font-weight:800;margin-bottom:14px}
+  h1 .o{color:var(--brand)}
+  .lead{font-size:18px;color:var(--muted);max-width:54ch}
+  .label{margin:34px 0 16px;font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--brand)}
+  ul{list-style:none;display:grid;gap:16px}
+  li{display:flex;gap:14px;align-items:flex-start}
+  .dot{flex:none;width:11px;height:11px;border-radius:50%;background:var(--brand);margin-top:9px}
+  li b{font-size:18px;font-weight:700}
+  li span{color:var(--muted)}
+  .insight{margin-top:30px;background:var(--card);border:1px solid var(--border);
+           border-left:5px solid var(--brand);border-radius:16px;padding:20px 22px}
+  .insight .l{font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--brand);text-transform:uppercase}
+  .insight p{font-style:italic;font-size:17px;margin-top:8px}
+  .cta{margin-top:34px;padding-top:26px;border-top:1px solid var(--border)}
+  .cta b{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em}
+  .cta span{color:var(--muted);font-size:17px}
+  .foot{margin-top:26px;color:var(--faint);font-size:13px;text-align:center}
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none;border:none}}
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="brand">
+      <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#FF7E33"/><stop offset="1" stop-color="#F03E17"/></linearGradient></defs>
+        <rect width="512" height="512" rx="116" fill="url(#g)"/>
+        <g fill="none" stroke="#fff" stroke-width="60" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="124,286 256,168 388,286"/><polyline points="124,418 256,300 388,418"/></g>
+      </svg>
+      <b>Zaya<span class="o">Run</span></b>
+    </div>
+
+    <h1>Sua assessoria de corrida<br><span class="o">no seu bolso.</span></h1>
+    <p class="lead">Conecte sua Strava e Garmin e transforme cada treino em evolução de
+       verdade — com a inteligência de um treinador, de forma simples e acessível.</p>
+
+    <div class="label">Por que ZayaRun</div>
+    <ul>
+      <li><span class="dot"></span><div><b>Métricas que treinam</b><br><span>pace, splits, cadência e evolução real</span></div></li>
+      <li><span class="dot"></span><div><b>Carga de treino (ACWR)</b><br><span>alerta de risco de lesão — quase ninguém te dá isso</span></div></li>
+      <li><span class="dot"></span><div><b>Projeção de provas</b><br><span>do 5k à maratona, a partir do que você já corre</span></div></li>
+      <li><span class="dot"></span><div><b>Insight do dia</b><br><span>um treinador que lê seus dados e diz o próximo passo</span></div></li>
+      <li><span class="dot"></span><div><b>Acessível e em português</b><br><span>o melhor do Strava/Garmin, sem complicação</span></div></li>
+    </ul>
+
+    <div class="insight">
+      <div class="l">Insight do dia</div>
+      <p>“Seu longão saiu 4% mais rápido no mesmo esforço. Mas a cadência caiu nos
+         últimos 2 km: faça 1 treino finish-fast esta semana.”</p>
+    </div>
+
+    <div class="cta">
+      <b>Tô construindo o ZayaRun.</b>
+      <span>Quer testar e dar seu palpite? Me chama. 🏃‍♂️</span>
+    </div>
+    <div class="foot">ZayaRun · corrida de rua · trail · evolua com dados</div>
+  </div>
+</body>
+</html>
