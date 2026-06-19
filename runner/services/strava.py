@@ -194,6 +194,7 @@ def _upsert_activity(user, item):
         "max_speed_ms": item.get("max_speed", 0) or 0,
         "average_heartrate": item.get("average_heartrate"),
         "max_heartrate": item.get("max_heartrate"),
+        "average_cadence": item.get("average_cadence"),
     }
     return Activity.objects.update_or_create(
         source=Activity.SOURCE_STRAVA,

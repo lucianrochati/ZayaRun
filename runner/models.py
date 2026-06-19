@@ -59,6 +59,7 @@ class Activity(models.Model):
     max_speed_ms = models.FloatField(default=0)
     average_heartrate = models.FloatField(null=True, blank=True)
     max_heartrate = models.FloatField(null=True, blank=True)
+    average_cadence = models.FloatField(null=True, blank=True)  # RPM (1 perna)
 
     # Splits por km (lista de dicts vinda da API; preenchido sob demanda).
     splits = models.JSONField(default=list, blank=True)
@@ -109,6 +110,13 @@ class Activity(models.Model):
         if h:
             return f"{h}h{m:02d}min"
         return f"{m}min{s:02d}s"
+
+    @property
+    def cadence_spm(self):
+        """Cadencia em passos por minuto (Strava reporta RPM de 1 perna)."""
+        if not self.average_cadence:
+            return None
+        return round(self.average_cadence * 2)
 
     @property
     def is_run(self):

@@ -20,6 +20,36 @@ RACE_DISTANCES = OrderedDict(
 )
 
 
+# Periodos de filtro (em dias). None = histórico completo.
+PERIODS = OrderedDict(
+    [
+        ("week", ("Semana", 7)),
+        ("month", ("Mês", 30)),
+        ("year", ("Ano", 365)),
+        ("all", ("Tudo", None)),
+    ]
+)
+
+
+def period_choices():
+    """Lista de (chave, rotulo) para montar o seletor na UI."""
+    return [(key, label) for key, (label, _days) in PERIODS.items()]
+
+
+def normalize_period(period):
+    return period if period in PERIODS else "month"
+
+
+def filter_by_period(activities, period):
+    """Filtra atividades pelo periodo escolhido (janela movel em dias)."""
+    period = normalize_period(period)
+    _label, days = PERIODS[period]
+    if days is None:
+        return list(activities)
+    cutoff = timezone.now() - timedelta(days=days)
+    return [a for a in activities if a.start_date >= cutoff]
+
+
 def only_runs(activities):
     return [a for a in activities if a.is_run]
 
@@ -31,6 +61,11 @@ def summary(activities):
     total_time_s = sum(a.moving_time_s for a in runs)
     total_elevation = sum(a.total_elevation_gain_m for a in runs)
     avg_pace = (total_time_s / (total_distance_m / 1000.0)) if total_distance_m else 0
+
+    cadences = [a.cadence_spm for a in runs if a.cadence_spm]
+    avg_cadence = round(sum(cadences) / len(cadences)) if cadences else None
+    avg_distance = (total_distance_m / 1000.0 / len(runs)) if runs else 0
+
     return {
         "count": len(runs),
         "total_distance_km": round(total_distance_m / 1000.0, 1),
@@ -38,47 +73,92 @@ def summary(activities):
         "total_elevation_m": round(total_elevation),
         "avg_pace_seconds": avg_pace,
         "avg_pace_str": format_pace(avg_pace),
+        "avg_distance_km": round(avg_distance, 1),
+        "avg_cadence_spm": avg_cadence,
     }
 
 
-def weekly_volume(activities, weeks=8):
+def volume_series(activities, period):
     """
-    Volume (km) por semana nas ultimas `weeks` semanas.
-    Retorna lista de dicts {label, km} da mais antiga para a mais recente.
+    Volume (km) agrupado de forma adequada ao periodo:
+      - Semana  -> por dia (7 dias)
+      - Mes     -> por semana (~6 semanas)
+      - Ano/Tudo-> por mes (12 meses)
+    Retorna lista de {label, km}, do mais antigo ao mais recente.
     """
+    period = normalize_period(period)
     runs = only_runs(activities)
-    today = timezone.localdate()
-    # Segunda-feira da semana atual.
-    start_of_week = today - timedelta(days=today.weekday())
-    buckets = OrderedDict()
-    for i in range(weeks - 1, -1, -1):
-        wk_start = start_of_week - timedelta(weeks=i)
-        buckets[wk_start] = 0.0
+    if period == "week":
+        return _bucket_by_day(runs, days=7)
+    if period == "month":
+        return _bucket_by_week(runs, weeks=6)
+    return _bucket_by_month(runs, months=12)
 
+
+def _bucket_by_day(runs, days):
+    today = timezone.localdate()
+    buckets = OrderedDict(
+        (today - timedelta(days=i), 0.0) for i in range(days - 1, -1, -1)
+    )
     for a in runs:
         d = timezone.localtime(a.start_date).date()
-        wk_start = d - timedelta(days=d.weekday())
-        if wk_start in buckets:
-            buckets[wk_start] += a.distance_m / 1000.0
+        if d in buckets:
+            buckets[d] += a.distance_m / 1000.0
+    return [{"label": d.strftime("%d/%m"), "km": round(km, 1)} for d, km in buckets.items()]
 
+
+def _bucket_by_week(runs, weeks):
+    today = timezone.localdate()
+    start_of_week = today - timedelta(days=today.weekday())
+    buckets = OrderedDict(
+        (start_of_week - timedelta(weeks=i), 0.0) for i in range(weeks - 1, -1, -1)
+    )
+    for a in runs:
+        d = timezone.localtime(a.start_date).date()
+        wk = d - timedelta(days=d.weekday())
+        if wk in buckets:
+            buckets[wk] += a.distance_m / 1000.0
+    return [{"label": wk.strftime("%d/%m"), "km": round(km, 1)} for wk, km in buckets.items()]
+
+
+def _bucket_by_month(runs, months):
+    today = timezone.localdate()
+    keys = []
+    y, m = today.year, today.month
+    for _ in range(months):
+        keys.append((y, m))
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    keys.reverse()
+    buckets = OrderedDict((k, 0.0) for k in keys)
+    for a in runs:
+        d = timezone.localtime(a.start_date).date()
+        if (d.year, d.month) in buckets:
+            buckets[(d.year, d.month)] += a.distance_m / 1000.0
+    meses = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
     return [
-        {"label": wk.strftime("%d/%m"), "km": round(km, 1)}
-        for wk, km in buckets.items()
+        {"label": f"{meses[mm - 1]}/{str(yy)[2:]}", "km": round(km, 1)}
+        for (yy, mm), km in buckets.items()
     ]
 
 
-def pace_evolution(activities, limit=20):
+def evolution_series(activities, limit=30):
     """
-    Serie de pace por corrida (cronologica), para o grafico de evolucao.
-    Retorna {labels, paces_seconds, paces_str}.
+    Series por corrida (cronologicas) para os graficos de evolucao:
+    pace, cadencia e distancia. Cadencia ausente vira None (gap no grafico).
     """
-    runs = sorted(only_runs(activities), key=lambda a: a.start_date)
-    runs = [a for a in runs if a.pace_seconds_per_km > 0][-limit:]
+    runs = sorted(
+        [a for a in only_runs(activities) if a.pace_seconds_per_km > 0],
+        key=lambda a: a.start_date,
+    )[-limit:]
     return {
         "labels": [timezone.localtime(a.start_date).strftime("%d/%m") for a in runs],
         "paces_seconds": [round(a.pace_seconds_per_km, 1) for a in runs],
         "paces_str": [a.pace_str for a in runs],
         "distances_km": [round(a.distance_km, 1) for a in runs],
+        "cadences_spm": [a.cadence_spm for a in runs],
+        "has_cadence": any(a.cadence_spm for a in runs),
     }
 
 

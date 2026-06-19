@@ -19,24 +19,33 @@ logger = logging.getLogger(__name__)
 def dashboard(request):
     """Painel principal do corredor: metricas, evolucao e projecoes."""
     has_strava = StravaToken.objects.filter(user=request.user).exists()
-    activities = list(request.user.activities.all())
+    all_activities = list(request.user.activities.all())
 
-    evolution = metrics.pace_evolution(activities)
-    volume = metrics.weekly_volume(activities)
+    period = metrics.normalize_period(request.GET.get("period", "month"))
+    activities = metrics.filter_by_period(all_activities, period)
+
+    evolution = metrics.evolution_series(activities)
+    volume = metrics.volume_series(activities, period)
 
     context = {
         "has_strava": has_strava,
         "strava_configured": strava.is_configured(),
+        "period": period,
+        "period_choices": metrics.period_choices(),
         "activities": activities[:15],
         "summary": metrics.summary(activities),
         "trend": metrics.evolution_trend(activities),
-        "acwr": metrics.acwr(activities),
+        # ACWR sempre usa janelas fixas (7/28 dias), independente do filtro.
+        "acwr": metrics.acwr(all_activities),
         "race": metrics.race_projections(activities),
-        "weekly_labels": json.dumps([w["label"] for w in volume]),
-        "weekly_km": json.dumps([w["km"] for w in volume]),
+        "volume_labels": json.dumps([v["label"] for v in volume]),
+        "volume_km": json.dumps([v["km"] for v in volume]),
         "evo_labels": json.dumps(evolution["labels"]),
         "evo_paces": json.dumps(evolution["paces_seconds"]),
         "evo_paces_str": json.dumps(evolution["paces_str"]),
+        "evo_distances": json.dumps(evolution["distances_km"]),
+        "evo_cadences": json.dumps(evolution["cadences_spm"]),
+        "evo_has_cadence": evolution["has_cadence"],
     }
     return render(request, "runner/dashboard.html", context)
 

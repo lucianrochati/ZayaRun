@@ -36,6 +36,14 @@
     </div>
   </div>
 
+  <!-- Seletor de periodo -->
+  <nav class="periods" aria-label="Periodo">
+    {% for key, label in period_choices %}
+      <a class="chip {% if key == period %}chip-on{% endif %}"
+         href="?period={{ key }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+
   <!-- Cartoes de resumo -->
   <section class="stats">
     <div class="stat">
@@ -54,6 +62,16 @@
       <span class="stat-val">{{ summary.total_elevation_m }}<i>m</i></span>
       <span class="stat-lbl">Elevação</span>
     </div>
+    <div class="stat">
+      <span class="stat-val">{{ summary.avg_distance_km }}<i>km</i></span>
+      <span class="stat-lbl">Média por corrida</span>
+    </div>
+    {% if summary.avg_cadence_spm %}
+    <div class="stat">
+      <span class="stat-val">{{ summary.avg_cadence_spm }}<i>spm</i></span>
+      <span class="stat-lbl">Cadência média</span>
+    </div>
+    {% endif %}
   </section>
 
   <!-- Evolucao + carga -->
@@ -87,15 +105,29 @@
 
   <!-- Graficos -->
   <div class="card">
-    <h2>Volume semanal (km)</h2>
+    <h2>Volume (km)</h2>
     <canvas id="volumeChart" height="120"></canvas>
   </div>
 
   {% if evo_labels != "[]" %}
   <div class="card">
-    <h2>Evolução do pace por corrida</h2>
+    <h2>Evolução do pace</h2>
+    <p class="muted small">Mais baixo = mais rápido.</p>
     <canvas id="paceChart" height="120"></canvas>
   </div>
+
+  <div class="card">
+    <h2>Evolução da distância</h2>
+    <canvas id="distanceChart" height="120"></canvas>
+  </div>
+
+  {% if evo_has_cadence %}
+  <div class="card">
+    <h2>Evolução da cadência (spm)</h2>
+    <p class="muted small">Referência comum em corrida: ~170–180 passos/min.</p>
+    <canvas id="cadenceChart" height="120"></canvas>
+  </div>
+  {% endif %}
   {% endif %}
 
   <!-- Projecao de provas -->
@@ -146,37 +178,60 @@
 {% if has_strava %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-  const accent = '#fc4c02', blue = '#2b6cb0';
-  const volLabels = {{ weekly_labels|safe }};
-  const volData = {{ weekly_km|safe }};
-  new Chart(document.getElementById('volumeChart'), {
-    type: 'bar',
-    data: { labels: volLabels, datasets: [{ label: 'km', data: volData,
-      backgroundColor: blue, borderRadius: 6 }] },
-    options: { plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } } }
-  });
+  const accent = '#fc4c02', blue = '#3b82f6', green = '#22c55e';
+  const grid = 'rgba(255,255,255,.06)';
+  Chart.defaults.color = '#93a4bd';
+  Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif";
 
-  const evoLabels = {{ evo_labels|safe }};
-  const evoPaces = {{ evo_paces|safe }};
-  const evoStr = {{ evo_paces_str|safe }};
-  const paceEl = document.getElementById('paceChart');
-  if (paceEl && evoLabels.length) {
-    new Chart(paceEl, {
+  function lineChart(elId, labels, data, color, fmt) {
+    const el = document.getElementById(elId);
+    if (!el || !labels.length) return;
+    new Chart(el, {
       type: 'line',
-      data: { labels: evoLabels, datasets: [{ label: 'pace', data: evoPaces,
-        borderColor: accent, backgroundColor: 'rgba(252,76,2,.12)',
-        tension: .3, fill: true, pointRadius: 4 }] },
+      data: { labels: labels, datasets: [{ data: data, borderColor: color,
+        backgroundColor: color.replace(')', ',.12)').replace('rgb', 'rgba'),
+        tension: .3, fill: true, pointRadius: 3, spanGaps: true }] },
       options: {
         plugins: { legend: { display: false },
-          tooltip: { callbacks: { label: (c) => 'Pace ' + evoStr[c.dataIndex] + '/km' } } },
-        scales: { y: { reverse: true,  // pace menor = melhor, fica em cima
-          ticks: { callback: (v) => {
-            const m = Math.floor(v/60), s = Math.round(v%60);
-            return m + ':' + String(s).padStart(2,'0'); } } } }
+          tooltip: { callbacks: { label: (c) => fmt.tip(c.parsed.y) } } },
+        scales: {
+          x: { grid: { color: grid } },
+          y: Object.assign({ grid: { color: grid } }, fmt.y || {})
+        }
       }
     });
   }
+
+  const paceTick = (v) => { const m = Math.floor(v/60), s = Math.round(v%60);
+    return m + ':' + String(s).padStart(2,'0'); };
+
+  // Volume (barras)
+  const volEl = document.getElementById('volumeChart');
+  new Chart(volEl, {
+    type: 'bar',
+    data: { labels: {{ volume_labels|safe }}, datasets: [{ data: {{ volume_km|safe }},
+      backgroundColor: blue, borderRadius: 6 }] },
+    options: { plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: (c) => c.parsed.y + ' km' } } },
+      scales: { x: { grid: { color: grid } },
+        y: { beginAtZero: true, grid: { color: grid } } } }
+  });
+
+  const evoLabels = {{ evo_labels|safe }};
+  const evoStr = {{ evo_paces_str|safe }};
+
+  // Pace (eixo invertido: menor em cima = melhor)
+  lineChart('paceChart', evoLabels, {{ evo_paces|safe }}, 'rgb(252,76,2)',
+    { tip: (v) => 'Pace ' + paceTick(v) + '/km',
+      y: { reverse: true, ticks: { callback: paceTick } } });
+
+  // Distancia
+  lineChart('distanceChart', evoLabels, {{ evo_distances|safe }}, 'rgb(59,130,246)',
+    { tip: (v) => v + ' km', y: { beginAtZero: true } });
+
+  // Cadencia
+  lineChart('cadenceChart', evoLabels, {{ evo_cadences|safe }}, 'rgb(34,197,94)',
+    { tip: (v) => v + ' spm' });
 </script>
 {% endif %}
 {% endblock %}
