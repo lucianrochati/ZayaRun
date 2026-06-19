@@ -1,0 +1,22 @@
+{% extends "runner/base.html" %}
+{% block title %}Entrar · ZayaRun{% endblock %}
+{% block content %}
+<div class="card auth-card">
+  <h1>Entrar</h1>
+  <p class="muted">Acesse seu painel de treinos.</p>
+  <form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+      <label class="field">
+        <span>{{ field.label }}</span>
+        {{ field }}
+        {% if field.errors %}<em class="err">{{ field.errors|striptags }}</em>{% endif %}
+      </label>
+    {% endfor %}
+    {% if form.non_field_errors %}
+      <div class="err">{{ form.non_field_errors|striptags }}</div>
+    {% endif %}
+    <button class="btn btn-primary" type="submit">Entrar</button>
+  </form>
+</div>
+{% endblock %}

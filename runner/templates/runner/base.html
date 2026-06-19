@@ -1,0 +1,46 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1f3a">
+  <title>{% block title %}ZayaRun{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'runner/css/style.css' %}">
+</head>
+<body>
+  <header class="topbar">
+    <a href="{% url 'dashboard' %}" class="brand">
+      <span class="brand-mark">▲</span> Zaya<strong>Run</strong>
+    </a>
+    <nav>
+      {% if user.is_authenticated %}
+        <span class="who">{{ user.username }}</span>
+        <form action="{% url 'logout' %}" method="post" class="inline">
+          {% csrf_token %}
+          <button class="link-btn" type="submit">sair</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}" class="link-btn">entrar</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  {% if messages %}
+    <div class="messages">
+      {% for m in messages %}
+        <div class="msg msg-{{ m.tags }}">{{ m }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="foot">
+    ZayaRun · assessoria de corrida · feito pra acelerar sua evolução
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

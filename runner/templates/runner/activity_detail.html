@@ -1,0 +1,57 @@
+{% extends "runner/base.html" %}
+{% block title %}{{ activity.name }} · ZayaRun{% endblock %}
+{% block content %}
+<p><a class="link-btn" href="{% url 'dashboard' %}">← voltar</a></p>
+
+<div class="card">
+  <h1>{{ activity.name|default:activity.sport_type }}</h1>
+  <p class="muted">{{ activity.start_date|date:"l, d/m/Y H:i" }} · {{ activity.get_source_display }}</p>
+
+  <section class="stats">
+    <div class="stat">
+      <span class="stat-val">{{ activity.distance_km|floatformat:2 }}<i>km</i></span>
+      <span class="stat-lbl">Distância</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">{{ activity.pace_str }}<i>/km</i></span>
+      <span class="stat-lbl">Pace médio</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">{{ activity.duration_str }}</span>
+      <span class="stat-lbl">Tempo</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">{{ activity.total_elevation_gain_m|floatformat:0 }}<i>m</i></span>
+      <span class="stat-lbl">Elevação</span>
+    </div>
+    {% if activity.average_heartrate %}
+    <div class="stat">
+      <span class="stat-val">{{ activity.average_heartrate|floatformat:0 }}<i>bpm</i></span>
+      <span class="stat-lbl">FC média</span>
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+{% if activity.splits %}
+<div class="card">
+  <h2>Parciais por km</h2>
+  <table class="tbl">
+    <thead><tr><th>Km</th><th>Pace</th><th>Desnível</th>{% if activity.average_heartrate %}<th>FC</th>{% endif %}</tr></thead>
+    <tbody>
+      {% for s in activity.splits %}
+        <tr>
+          <td>{{ s.km }}</td>
+          <td>{{ s.pace_str }}/km</td>
+          <td>{{ s.elevation_diff|default:0|floatformat:0 }} m</td>
+          {% if activity.average_heartrate %}<td>{{ s.average_heartrate|default:"--"|floatformat:0 }}</td>{% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted small">Parciais fornecidas pela Strava (a cada 1 km).</p>
+</div>
+{% else %}
+<p class="muted">Sem parciais detalhadas para este treino.</p>
+{% endif %}
+{% endblock %}

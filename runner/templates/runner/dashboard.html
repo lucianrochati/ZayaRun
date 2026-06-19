@@ -1,0 +1,182 @@
+{% extends "runner/base.html" %}
+{% block title %}Meu painel · ZayaRun{% endblock %}
+{% block content %}
+
+{% if not has_strava %}
+  <div class="card hero">
+    <h1>Conecte sua Strava e comece a evoluir</h1>
+    <p class="muted">
+      O ZayaRun puxa seus treinos da Strava e mostra pace, volume, evolução
+      e projeção de provas — do jeito do treinador.
+    </p>
+    {% if strava_configured %}
+      <a class="btn btn-strava" href="{% url 'strava_connect' %}">Conectar com a Strava</a>
+    {% else %}
+      <p class="warn">
+        Integração ainda não configurada. Defina <code>STRAVA_CLIENT_ID</code> e
+        <code>STRAVA_CLIENT_SECRET</code> no ambiente.
+      </p>
+    {% endif %}
+    <p class="muted small">Garmin em breve (aguardando aprovação da API).</p>
+  </div>
+{% else %}
+
+  <div class="row-between">
+    <h1>Seu painel</h1>
+    <div class="actions">
+      <form action="{% url 'strava_sync' %}" method="post" class="inline">
+        {% csrf_token %}
+        <button class="btn btn-sm" type="submit">↻ Sincronizar</button>
+      </form>
+      <form action="{% url 'strava_disconnect' %}" method="post" class="inline"
+            onsubmit="return confirm('Desconectar a Strava?');">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-ghost" type="submit">desconectar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cartoes de resumo -->
+  <section class="stats">
+    <div class="stat">
+      <span class="stat-val">{{ summary.total_distance_km }}<i>km</i></span>
+      <span class="stat-lbl">Distância total</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">{{ summary.avg_pace_str }}<i>/km</i></span>
+      <span class="stat-lbl">Pace médio</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">{{ summary.count }}</span>
+      <span class="stat-lbl">Corridas</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">{{ summary.total_elevation_m }}<i>m</i></span>
+      <span class="stat-lbl">Elevação</span>
+    </div>
+  </section>
+
+  <!-- Evolucao + carga -->
+  <div class="grid-2">
+    {% if trend %}
+    <div class="card">
+      <h2>Evolução do pace</h2>
+      {% if trend.improved %}
+        <p class="big-good">▼ {{ trend.delta_str }}/km mais rápido</p>
+      {% else %}
+        <p class="big-bad">▲ {{ trend.delta_str }}/km mais lento</p>
+      {% endif %}
+      <p class="muted small">
+        Últimas corridas em {{ trend.recent_pace_str }}/km
+        vs {{ trend.previous_pace_str }}/km antes.
+      </p>
+    </div>
+    {% endif %}
+
+    {% if acwr %}
+    <div class="card">
+      <h2>Carga de treino (ACWR)</h2>
+      <p class="big acwr-{{ acwr.zone }}">{{ acwr.ratio }}</p>
+      <p class="muted small">{{ acwr.label }}</p>
+      <p class="muted small">
+        Aguda 7d: {{ acwr.acute_km }} km · Crônica/sem: {{ acwr.chronic_week_km }} km
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Graficos -->
+  <div class="card">
+    <h2>Volume semanal (km)</h2>
+    <canvas id="volumeChart" height="120"></canvas>
+  </div>
+
+  {% if evo_labels != "[]" %}
+  <div class="card">
+    <h2>Evolução do pace por corrida</h2>
+    <canvas id="paceChart" height="120"></canvas>
+  </div>
+  {% endif %}
+
+  <!-- Projecao de provas -->
+  {% if race %}
+  <div class="card">
+    <h2>Projeção de provas</h2>
+    <p class="muted small">
+      Base: melhor corrida de {{ race.base_distance_km }} km a {{ race.base_pace_str }}/km
+      (fórmula de Riegel).
+    </p>
+    <table class="tbl">
+      <thead><tr><th>Prova</th><th>Tempo estimado</th><th>Pace</th></tr></thead>
+      <tbody>
+        {% for p in race.projections %}
+          <tr><td>{{ p.label }}</td><td>{{ p.time_str }}</td><td>{{ p.pace_str }}/km</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Lista de atividades -->
+  <div class="card">
+    <h2>Treinos recentes</h2>
+    {% if activities %}
+      <ul class="act-list">
+        {% for a in activities %}
+          <li>
+            <a href="{% url 'activity_detail' a.pk %}">
+              <span class="act-name">{{ a.name|default:a.sport_type }}</span>
+              <span class="act-meta">
+                {{ a.start_date|date:"d/m/Y" }} ·
+                {{ a.distance_km|floatformat:1 }} km ·
+                {{ a.pace_str }}/km · {{ a.duration_str }}
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Nenhum treino ainda. Clique em “Sincronizar”.</p>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if has_strava %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const accent = '#fc4c02', blue = '#2b6cb0';
+  const volLabels = {{ weekly_labels|safe }};
+  const volData = {{ weekly_km|safe }};
+  new Chart(document.getElementById('volumeChart'), {
+    type: 'bar',
+    data: { labels: volLabels, datasets: [{ label: 'km', data: volData,
+      backgroundColor: blue, borderRadius: 6 }] },
+    options: { plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } } }
+  });
+
+  const evoLabels = {{ evo_labels|safe }};
+  const evoPaces = {{ evo_paces|safe }};
+  const evoStr = {{ evo_paces_str|safe }};
+  const paceEl = document.getElementById('paceChart');
+  if (paceEl && evoLabels.length) {
+    new Chart(paceEl, {
+      type: 'line',
+      data: { labels: evoLabels, datasets: [{ label: 'pace', data: evoPaces,
+        borderColor: accent, backgroundColor: 'rgba(252,76,2,.12)',
+        tension: .3, fill: true, pointRadius: 4 }] },
+      options: {
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: (c) => 'Pace ' + evoStr[c.dataIndex] + '/km' } } },
+        scales: { y: { reverse: true,  // pace menor = melhor, fica em cima
+          ticks: { callback: (v) => {
+            const m = Math.floor(v/60), s = Math.round(v%60);
+            return m + ':' + String(s).padStart(2,'0'); } } } }
+      }
+    });
+  }
+</script>
+{% endif %}
+{% endblock %}
