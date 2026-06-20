@@ -1,0 +1,19 @@
+{% extends "runner/base.html" %}
+{% block title %}Aceitar convite · ZayaRun{% endblock %}
+{% block content %}
+<p style="margin-top:4px"><a class="link-btn" href="{% url 'dashboard' %}">← Voltar ao painel</a></p>
+
+<div class="page-head"><div><p class="eyebrow">Assessoria</p><h1>Aceitar convite do treinador</h1></div></div>
+
+<div class="card">
+  <p class="muted" style="margin-top:0">Recebeu um código do seu treinador? Digite abaixo para vincular sua conta —
+     ele passará a ver sua evolução e a prescrever seus treinos.</p>
+  <form action="{% url 'accept_invite' %}" method="post">
+    {% csrf_token %}
+    <label class="field"><span>Código do convite</span>
+      <input type="text" name="code" placeholder="Ex.: K7P2Q9" maxlength="12" required
+             style="text-transform:uppercase;letter-spacing:.15em;font-weight:700"></label>
+    <button class="btn btn-primary" type="submit">Vincular ao treinador</button>
+  </form>
+</div>
+{% endblock %}

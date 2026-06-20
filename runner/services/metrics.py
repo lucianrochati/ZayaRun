@@ -306,6 +306,118 @@ def acwr(activities):
     }
 
 
+def split_fade(activity):
+    """
+    % de queda de pace entre a 1a e a 2a metade da corrida (positivo = perdeu
+    ritmo / largou rapido demais). Precisa de splits por km. None se nao da.
+    """
+    splits = [
+        s for s in (getattr(activity, "splits", None) or [])
+        if s.get("pace_seconds_per_km")
+    ]
+    if len(splits) < 4:
+        return None
+    half = len(splits) // 2
+    first = sum(s["pace_seconds_per_km"] for s in splits[:half]) / half
+    second = sum(s["pace_seconds_per_km"] for s in splits[half:]) / (len(splits) - half)
+    if first <= 0:
+        return None
+    return round((second - first) / first * 100, 1)
+
+
+def adherence(planned, activity):
+    """
+    Compara um treino PRESCRITO (PlannedWorkout) com a atividade REALIZADA.
+
+    Retorna um dict com: aderencia de distancia, avaliacao de pace, fade,
+    score 0-100, status e observacoes textuais — o coracao do
+    "planejado x realizado". `None` se nao houver atividade casada.
+    """
+    if activity is None:
+        return None
+
+    out = {"notes": []}
+    components = []
+
+    # --- Distancia ---
+    if planned.target_distance_m:
+        ratio = activity.distance_m / planned.target_distance_m if planned.target_distance_m else 0
+        out["distance_ratio"] = round(ratio, 2)
+        out["distance_pct"] = round(ratio * 100)
+        components.append(max(0.0, 1.0 - abs(ratio - 1.0) / 0.5))  # zera a +-50%
+        if ratio < 0.85:
+            out["notes"].append(
+                f"Distância abaixo do previsto: {activity.distance_km:.1f} de "
+                f"{planned.target_distance_km:.1f} km."
+            )
+        elif ratio > 1.15:
+            out["notes"].append(
+                f"Distância acima do previsto: {activity.distance_km:.1f} de "
+                f"{planned.target_distance_km:.1f} km."
+            )
+
+    # --- Pace ---
+    pace = activity.pace_seconds_per_km
+    if (planned.target_pace_low_s or planned.target_pace_high_s) and pace > 0:
+        lo = planned.target_pace_low_s or planned.target_pace_high_s
+        hi = planned.target_pace_high_s or planned.target_pace_low_s
+        mid = (lo + hi) / 2.0
+        tol = 5  # 5s/km de tolerancia
+        if pace < lo - tol:
+            out["pace_eval"] = "fast"
+            out["notes"].append(
+                f"Pace mais forte que o alvo ({format_pace(pace)} vs "
+                f"{planned.target_pace_str}/km previsto)."
+            )
+        elif pace > hi + tol:
+            out["pace_eval"] = "slow"
+            out["notes"].append(
+                f"Pace mais lento que o alvo ({format_pace(pace)} vs "
+                f"{planned.target_pace_str}/km previsto)."
+            )
+        else:
+            out["pace_eval"] = "on"
+        components.append(max(0.0, 1.0 - (abs(pace - mid) / mid) / 0.10))  # zera a +-10%
+
+    # --- Fade (precisa de splits) ---
+    fade = split_fade(activity)
+    if fade is not None:
+        out["fade_pct"] = fade
+        if fade >= 5:
+            out["notes"].append(
+                f"Perdeu ~{fade:.0f}% de ritmo na 2ª metade — largou forte demais."
+            )
+
+    out["score"] = round(sum(components) / len(components) * 100) if components else 100
+    score = out["score"]
+    if score >= 85:
+        out["status"], out["zone"] = "Cumpriu", "ideal"
+    elif score >= 60:
+        out["status"], out["zone"] = "Parcial", "atencao"
+    else:
+        out["status"], out["zone"] = "Fora do alvo", "risco"
+    return out
+
+
+def plan_adherence_rate(planned_workouts):
+    """
+    Taxa de aderencia de um conjunto de treinos prescritos JA VENCIDOS:
+    % de treinos (nao-descanso) que viraram 'realizado'. Util no painel do coach.
+    """
+    due = [
+        p for p in planned_workouts
+        if p.workout_type != "rest" and p.date <= timezone.localdate()
+    ]
+    if not due:
+        return None
+    done = sum(1 for p in due if p.status == "completed")
+    return {
+        "done": done,
+        "total": len(due),
+        "pct": round(done / len(due) * 100),
+    }
+
+
 # --- Formatadores ---
 def format_pace(seconds_per_km):
     if not seconds_per_km or seconds_per_km <= 0:

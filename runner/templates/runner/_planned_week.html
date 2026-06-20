@@ -1,0 +1,32 @@
+{% comment %}Semana prescrita. Espera: week (dict de planned_week). {% endcomment %}
+<div class="week">
+  {% for day in week.items %}
+    <div class="wk-day {% if day.is_today %}wk-today{% endif %}">
+      <div class="wk-date"><b>{{ day.weekday }}</b><span>{{ day.date|date:"d/m" }}</span></div>
+      <div class="wk-workouts">
+        {% for w in day.workouts %}
+          <div class="wo wt-{{ w.workout_type }}">
+            <div class="wo-body">
+              <span class="wo-title">{{ w.title }}</span>
+              <span class="wo-meta">
+                {% if w.target_distance_km %}{{ w.target_distance_km }} km{% endif %}
+                {% if w.target_pace_str %} · {{ w.target_pace_str }}/km{% endif %}
+                {% if w.source == 'ai' %} · IA{% elif w.source == 'coach' %} · treinador{% endif %}
+              </span>
+              {% if w.description %}<span class="wo-desc">{{ w.description }}</span>{% endif %}
+              {% if w.adherence %}
+                <span class="pill pill-{{ w.adherence.zone }} wo-adh">{{ w.adherence.status }} · {{ w.adherence.score }}%</span>
+              {% endif %}
+            </div>
+            <div class="wo-side">
+              {% if w.status == 'completed' %}<span class="wo-check" title="Realizado">✓</span>
+              {% elif w.status == 'missed' %}<span class="wo-miss" title="Perdido">✕</span>{% endif %}
+            </div>
+          </div>
+        {% empty %}
+          <span class="wk-rest">descanso</span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+</div>

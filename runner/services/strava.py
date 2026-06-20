@@ -17,7 +17,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from runner.models import Activity, StravaToken
-from runner.services import metrics
+from runner.services import matching, metrics
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +151,8 @@ def sync_activities(user, per_page=50, pages=2):
             _, was_created = _upsert_activity(user, item)
             created += int(was_created)
             updated += int(not was_created)
+    # Casa o realizado com os treinos prescritos (planejado x realizado).
+    matching.reconcile(user)
     return created, updated
 
 

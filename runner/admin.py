@@ -1,6 +1,15 @@
 from django.contrib import admin
 
-from runner.models import Activity, StravaToken
+from runner.models import (
+    Activity,
+    CoachAthlete,
+    DailyCheckin,
+    PlannedWorkout,
+    Profile,
+    StravaToken,
+    TrainingPlan,
+    WorkoutFeedback,
+)
 
 
 @admin.register(StravaToken)
@@ -23,3 +32,65 @@ class ActivityAdmin(admin.ModelAdmin):
     list_filter = ("source", "sport_type", "start_date")
     search_fields = ("name", "user__username", "external_id")
     date_hierarchy = "start_date"
+
+
+@admin.register(Profile)
+class ProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "display_name", "is_coach", "created_at")
+    list_filter = ("is_coach",)
+    search_fields = ("user__username", "display_name")
+
+
+@admin.register(CoachAthlete)
+class CoachAthleteAdmin(admin.ModelAdmin):
+    list_display = ("coach", "athlete", "label", "status", "invite_code", "invited_at")
+    list_filter = ("status",)
+    search_fields = ("coach__username", "athlete__username", "invite_code", "label")
+
+
+@admin.register(TrainingPlan)
+class TrainingPlanAdmin(admin.ModelAdmin):
+    list_display = (
+        "athlete",
+        "goal_label",
+        "goal_race_date",
+        "status",
+        "generated_by",
+        "created_at",
+    )
+    list_filter = ("status", "generated_by")
+    search_fields = ("athlete__username", "goal_label")
+    date_hierarchy = "goal_race_date"
+
+
+@admin.register(PlannedWorkout)
+class PlannedWorkoutAdmin(admin.ModelAdmin):
+    list_display = (
+        "date",
+        "athlete",
+        "workout_type",
+        "title",
+        "status",
+        "source",
+        "matched_activity",
+    )
+    list_filter = ("status", "workout_type", "source")
+    search_fields = ("athlete__username", "title")
+    date_hierarchy = "date"
+    raw_id_fields = ("matched_activity", "plan")
+
+
+@admin.register(WorkoutFeedback)
+class WorkoutFeedbackAdmin(admin.ModelAdmin):
+    list_display = ("date", "athlete", "rpe", "feeling", "soreness")
+    list_filter = ("feeling",)
+    search_fields = ("athlete__username",)
+    date_hierarchy = "date"
+
+
+@admin.register(DailyCheckin)
+class DailyCheckinAdmin(admin.ModelAdmin):
+    list_display = ("date", "athlete", "sleep_hours", "soreness", "stress", "source")
+    list_filter = ("source",)
+    search_fields = ("athlete__username",)
+    date_hierarchy = "date"

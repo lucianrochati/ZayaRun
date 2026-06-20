@@ -29,18 +29,34 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Detalhe da atividade** com parciais por km (splits).
 - **Redesign enterprise**: design system (tokens, Inter), logo SVG + ícones PNG, **PWA instalável** (manifest + meta tags).
 - **Folder de divulgação**: `pitch/zayarun-folder.png` (vertical) e `pitch/zayarun-folder.html`.
-- **Testes:** 24 passando (`python manage.py test`).
+
+### Lado-treinador / assessoria (NOVO — H1→H3)
+- **Papéis e vínculo:** `Profile` (atleta/treinador), `CoachAthlete` com convite por código + aceite.
+- **Painel do coach (H1):** roster com **triagem por IA/regras** (semáforo de risco, abandono, conquista) e resumo do dia.
+- **Prescrição (H1+H2):** treino manual, **semana gerada automaticamente** (regras + ajuste por ACWR, nota opcional da Claude) e **planejado × realizado** com matching automático no sync da Strava + score de aderência.
+- **Feedback do atleta (H1):** PSE (1–10) + sensação, e **check-in diário** (sono/dor/estresse) que alimentam o contexto da IA.
+- **Plano de prova adaptativo (H3):** macrociclo periodizado (base→construção→pico→polimento) com paces-alvo; recriar = re-planeja semanas futuras pela forma atual.
+- **Copiloto conversacional (H3):** pergunta em linguagem natural respondida sobre os próprios dados (fallback honesto sem chave).
+- **Prontidão (H3):** índice heurístico **transparente** (carga+percepção+check-in); HRV/sono e ML de lesão deixados como ponto de extensão honesto (sem número falso) em `services/wellness.py` e `services/garmin.py`.
+- **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
+- **Testes:** 45 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
 ```
 zayarun/settings.py          # config (env vars; ALLOWED_HOSTS p/ heroku+render; INSIGHT_*; STRAVA_*)
 runner/models.py             # StravaToken, Activity (distance, pace, cadence, splits...)
-runner/views.py              # dashboard, OAuth (connect/callback/sync/disconnect), activity_detail
-runner/services/strava.py    # cliente OAuth + API Strava
-runner/services/garmin.py    # placeholder (aguardando aprovação)
-runner/services/metrics.py   # pace, volume, evolução, ACWR, Riegel, personal_records
-runner/services/insights.py  # "Insight do dia": build_context + gerador regras + gerador Claude
+runner/views.py              # dashboard (corredor + semana prescrita + feedback), OAuth, activity_detail
+runner/views_coach.py        # roster/triagem, prescrição, plano, feedback/PSE, check-in, copiloto
+runner/services/strava.py    # cliente OAuth + API Strava (sync agora reconcilia planejado×realizado)
+runner/services/garmin.py    # placeholder (aguardando aprovação; inclui contrato sync_wellness)
+runner/services/metrics.py   # pace, volume, evolução, ACWR, Riegel, PRs, adherence, split_fade
+runner/services/matching.py  # casa Activity ↔ PlannedWorkout (planejado × realizado)
+runner/services/plans.py     # gerador de macrociclo (plano de prova periodizado)
+runner/services/ai.py        # wrapper fino sobre a Claude (compartilhado), fallback honesto
+runner/services/coaching.py  # auto_prescribe, triage_roster, analyze_workout, copiloto
+runner/services/wellness.py  # prontidão (heurística transparente) + ponto de extensão p/ ML
+runner/services/insights.py  # "Insight do dia": build_context (+wellness) + regras + Claude
 runner/management/commands/createsu.py  # cria superusuário via env (deploy sem terminal)
 runner/templates/runner/     # base, login, dashboard, activity_detail, _logo_symbol
 runner/static/runner/        # css/style.css (design system), img/ (logo+ícones), manifest.webmanifest
@@ -83,9 +99,16 @@ python manage.py runserver
    - falta **service worker** (offline) no PWA;
    - rota `/.well-known/assetlinks.json` (verificação de posse);
    - conta Play Console (US$ 25), empacotar no **PWABuilder**, política de privacidade.
-3. **Lado da assessoria** (treinador → aluno): plano prescrito × realizado, painel do coach. (Diferencial / receita.)
-4. **Garmin** (quando a Health API for aprovada).
-5. Ideias de UX: PRs com confete, gráficos interativos (tocar→treino), média móvel, bottom nav, card compartilhável.
+3. ~~**Lado da assessoria**~~ ✅ **FEITO** (H1→H3): roster+triagem, prescrição manual/IA, planejado×realizado,
+   plano de prova adaptativo, copiloto, PSE/check-in, prontidão. Próximos refinos abaixo.
+4. **Garmin** (quando a Health API for aprovada) — ativar `sync_activities` + `sync_wellness` (HRV/sono → prontidão/ML).
+5. **ML de lesão real:** trocar a heurística de `wellness.predict_injury_risk` por modelo treinado (exige HRV/sono + histórico rotulado).
+6. **Notificações** ao coach (atleta em risco/sumido) e ao atleta (treino do dia).
+7. Ideias de UX: PRs com confete, gráficos interativos (tocar→treino), média móvel, card compartilhável.
+
+### Setup de ambiente (NOVO)
+- Não havia Python na máquina; instalado **Python 3.12** via `winget` + criado **`.venv`** local com `requirements.txt`.
+- Rodar testes/servidor: `.\.venv\Scripts\python.exe manage.py test` / `runserver`.
 
 ## 9. Pontos de atenção
 - **Termos da Strava** para app publicado: "Powered by Strava", link "Ver no Strava", não treinar modelos com os dados.
@@ -94,5 +117,5 @@ python manage.py runserver
 - **Segurança:** repo é público — nenhum segredo deve ser commitado (secret/admin/API key só em Config Vars).
 
 ## 10. Como retomar
-Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`python manage.py test`) para confirmar baseline (24 OK),
+Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`python manage.py test`) para confirmar baseline (45 OK),
 escolher o item 1 ou 2 da seção 8 e seguir.

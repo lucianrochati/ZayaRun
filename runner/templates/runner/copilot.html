@@ -1,0 +1,38 @@
+{% extends "runner/base.html" %}
+{% block title %}Copiloto · ZayaRun{% endblock %}
+{% block content %}
+
+<div class="page-head"><div><p class="eyebrow">Copiloto</p><h1>Pergunte ao seu treinador IA</h1></div></div>
+
+{% if not ai_enabled %}
+  <div class="note-soft">O copiloto com IA precisa da variável <code>ANTHROPIC_API_KEY</code> configurada no ambiente.
+    Sem ela, ele responde apontando para os dados do seu painel.</div>
+{% endif %}
+
+<div class="card">
+  <form action="{% url 'copilot' %}" method="post" id="copilotForm">
+    {% csrf_token %}
+    <label class="field" style="margin-top:0"><span>Sua pergunta</span>
+      <textarea name="question" id="q" placeholder="Ex.: como está minha evolução de pace nas últimas semanas?">{{ question }}</textarea></label>
+    <div class="chat-suggest">
+      {% for s in suggestions %}<button type="button" class="chip" onclick="ask('{{ s|escapejs }}')">{{ s }}</button>{% endfor %}
+    </div>
+    <button class="btn btn-primary" type="submit">Perguntar</button>
+  </form>
+
+  {% if question %}
+    <div class="bubble bubble-user">{{ question }}</div>
+  {% endif %}
+  {% if answer %}
+    <div class="bubble bubble-ai"><b>Copiloto:</b> {{ answer|linebreaksbr }}</div>
+  {% endif %}
+</div>
+
+<p class="card-sub" style="margin-left:4px">O copiloto analisa <b>apenas os seus dados</b> (pace, volume, carga, projeções). Ele não inventa números.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function ask(text){ document.getElementById('q').value = text; document.getElementById('copilotForm').submit(); }
+</script>
+{% endblock %}

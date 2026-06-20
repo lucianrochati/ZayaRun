@@ -20,6 +20,8 @@
          e <code>STRAVA_CLIENT_SECRET</code> no ambiente.</p>
     {% endif %}
     <p class="muted small" style="margin-top:14px">Garmin em breve · aguardando aprovação da API.</p>
+    <p class="muted small" style="margin-top:10px">Recebeu convite de um treinador?
+      <a class="link-btn" href="{% url 'accept_invite' %}" style="color:var(--brand-2)">Inserir código →</a></p>
   </div>
 {% else %}
 
@@ -40,6 +42,44 @@
       </form>
     </div>
   </div>
+
+  <!-- Assessoria: vínculo + feedback pendente + esta semana -->
+  {% if coach_link %}
+    <p class="card-sub" style="margin:8px 4px 0">👟 Treinado por <b>{{ coach_link.coach.get_username }}</b></p>
+  {% endif %}
+
+  {% if needs_feedback %}
+    <div class="card feedback-prompt">
+      <div class="card-head"><h3>Como foi seu treino?</h3>
+        <span class="pill pill-atencao">{{ needs_feedback|length }} pendente{{ needs_feedback|length|pluralize }}</span></div>
+      {% for w in needs_feedback %}
+      <form action="{% url 'workout_feedback' w.id %}" method="post" style="margin-bottom:12px">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'dashboard' %}">
+        <p class="wo-title" style="margin:0 0 6px">{{ w.title }} · {{ w.date|date:"d/m" }}</p>
+        <div class="feel-row">
+          {% for val, label in feeling_choices %}
+            <label class="feel-opt"><input type="radio" name="feeling" value="{{ val }}">{{ label }}</label>
+          {% endfor %}
+        </div>
+        <div class="form-grid" style="margin-top:8px">
+          <label class="field" style="margin:0"><span>Esforço percebido (PSE 1–10)</span>
+            <input type="number" name="rpe" min="1" max="10" placeholder="Ex.: 7"></label>
+          <div class="field" style="margin:0;display:flex;align-items:flex-end">
+            <button class="btn btn-sm btn-primary" type="submit">Registrar feedback</button></div>
+        </div>
+      </form>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if week_plan.workouts %}
+    <div class="page-head" style="margin-top:14px">
+      <p class="section-label" style="margin:0">Esta semana</p>
+      <a class="link-btn" href="{% url 'my_plan' %}">Ver plano →</a>
+    </div>
+    {% include "runner/_planned_week.html" with week=week_plan %}
+  {% endif %}
 
   <!-- Período -->
   <div class="segmented" role="tablist" aria-label="Período">

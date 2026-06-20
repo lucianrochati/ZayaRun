@@ -1,0 +1,8 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "deploy": {
+    "startCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py createsu && gunicorn zayarun.wsgi --bind 0.0.0.0:$PORT --log-file -",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}

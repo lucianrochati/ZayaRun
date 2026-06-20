@@ -29,6 +29,25 @@
   {% endif %}
 </section>
 
+{% if planned %}
+<p class="section-label">Planejado × realizado</p>
+<div class="card wt-{{ planned.workout_type }}" style="border-left:4px solid">
+  <div class="card-head">
+    <h3>{{ planned.title }}</h3>
+    {% if adherence %}<span class="pill pill-{{ adherence.zone }}">{{ adherence.status }} · {{ adherence.score }}%</span>{% endif %}
+  </div>
+  <p class="card-sub" style="margin-top:0">Prescrito:
+    {% if planned.target_distance_km %}{{ planned.target_distance_km }} km{% endif %}
+    {% if planned.target_pace_str %} · {{ planned.target_pace_str }}/km{% endif %}
+    {% if planned.description %} — {{ planned.description }}{% endif %}</p>
+  {% if adherence.notes %}
+    {% for n in adherence.notes %}<p class="insight-text">• {{ n }}</p>{% endfor %}
+  {% else %}
+    <p class="insight-text">Treino cumprido conforme o previsto. 👏</p>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if activity.splits %}
 <p class="section-label">Parciais por km</p>
 <div class="card">

@@ -27,3 +27,15 @@ def sync_activities(user, **kwargs):
         "Integracao Garmin pendente de aprovacao da API. "
         "Use a Strava por enquanto."
     )
+
+
+def sync_wellness(user, **kwargs):
+    """
+    (Futuro) Ingerir HRV, FC de repouso e sono da Garmin Health API e gravar
+    em runner.models.DailyCheckin (source="garmin"), alimentando o índice de
+    prontidao (services.wellness). Esses campos ja existem no modelo, nulos,
+    justamente para receber estes dados sem nova migracao. Hoje: indisponivel.
+    """
+    raise NotImplementedError(
+        "Wellness da Garmin (HRV/sono) pendente de aprovacao da Health API."
+    )

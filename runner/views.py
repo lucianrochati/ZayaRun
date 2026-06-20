@@ -1,15 +1,18 @@
 """Views do ZayaRun (lado do corredor)."""
 import json
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from runner.models import Activity, StravaToken
+from runner import views_coach
+from runner.models import Activity, CoachAthlete, PlannedWorkout, StravaToken, WorkoutFeedback
 from runner.services import insights, metrics, strava
 
 logger = logging.getLogger(__name__)
@@ -27,7 +30,36 @@ def dashboard(request):
     evolution = metrics.evolution_series(activities)
     volume = metrics.volume_series(activities, period)
 
+    # --- Lado-treinador para o atleta: vínculo, semana prescrita, pendências ---
+    today = timezone.localdate()
+    coach_link = (
+        CoachAthlete.objects.filter(
+            athlete=request.user, status=CoachAthlete.STATUS_ACTIVE
+        ).select_related("coach").first()
+    )
+    week_plan = views_coach.planned_week(request.user)
+    today_workouts = [w for w in week_plan["workouts"] if w.date == today]
+    # Treinos realizados nos últimos dias ainda sem feedback (pede PSE).
+    done_recent = [
+        w for w in request.user.planned_workouts.filter(
+            date__gte=today - timedelta(days=4),
+            status=PlannedWorkout.STATUS_COMPLETED,
+        )
+    ]
+    with_feedback = set(
+        WorkoutFeedback.objects.filter(
+            planned_workout__in=done_recent
+        ).values_list("planned_workout_id", flat=True)
+    )
+    needs_feedback = [w for w in done_recent if w.pk not in with_feedback]
+
     context = {
+        "coach_link": coach_link,
+        "is_coach": getattr(getattr(request.user, "profile", None), "is_coach", False),
+        "week_plan": week_plan,
+        "today_workouts": today_workouts,
+        "needs_feedback": needs_feedback,
+        "feeling_choices": WorkoutFeedback.FEELING_CHOICES,
         "has_strava": has_strava,
         "strava_configured": strava.is_configured(),
         "period": period,
@@ -131,4 +163,11 @@ def activity_detail(request, pk):
             strava.fetch_activity_detail(request.user, activity)
         except strava.StravaError as exc:
             messages.warning(request, f"Nao foi possivel carregar os splits: {exc}")
-    return render(request, "runner/activity_detail.html", {"activity": activity})
+    # Se esta atividade cumpriu um treino prescrito, mostra planejado x realizado.
+    planned = activity.planned_workouts.first()
+    adherence = metrics.adherence(planned, activity) if planned else None
+    return render(request, "runner/activity_detail.html", {
+        "activity": activity,
+        "planned": planned,
+        "adherence": adherence,
+    })

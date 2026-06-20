@@ -1,0 +1,78 @@
+{% extends "runner/base.html" %}
+{% block title %}Treinador · ZayaRun{% endblock %}
+{% block content %}
+
+{% if not is_coach %}
+  <div class="card hero">
+    <svg class="hero-mark"><use href="#zaya-mark"/></svg>
+    <h1>Vire treinador no ZayaRun</h1>
+    <p>Acompanhe seus atletas, prescreva treinos e deixe a IA cuidar do trabalho braçal —
+       triagem de risco, planilha e análise do planejado × realizado.</p>
+    <ul class="feature-list">
+      <li><span class="tick">✓</span><span><b>Painel do time</b> com semáforo de risco e abandono</span></li>
+      <li><span class="tick">✓</span><span><b>Prescrição</b> manual ou gerada por IA</span></li>
+      <li><span class="tick">✓</span><span><b>Planejado × realizado</b> com aderência automática</span></li>
+    </ul>
+    <form action="{% url 'become_coach' %}" method="post">
+      {% csrf_token %}
+      <button class="btn btn-primary" type="submit" style="max-width:280px;margin:0 auto">Ativar modo treinador</button>
+    </form>
+  </div>
+{% else %}
+
+  <div class="page-head">
+    <div><p class="eyebrow">Treinador</p><h1>Meu time</h1></div>
+  </div>
+
+  <div class="summary-banner">{{ summary }}</div>
+
+  {% if cards %}
+    <div class="roster">
+      {% for c in cards %}
+        <a class="rcard flag-{{ c.flag }}" href="{% url 'coach_athlete' c.athlete.id %}">
+          <div class="rcard-head">
+            <span class="rcard-name">{{ c.name }}</span>
+            <span class="rflag">
+              {% if c.flag == 'risk' %}🚨{% elif c.flag == 'idle' %}😴{% elif c.flag == 'attention' %}⚠️{% elif c.flag == 'celebrate' %}🎉{% elif c.flag == 'new' %}🆕{% else %}✅{% endif %}
+            </span>
+          </div>
+          <div class="rcard-reason">{{ c.reason }}</div>
+          <div class="rcard-stats">
+            <span>Semana <b>{{ c.week_km }}</b> km</span>
+            {% if c.acwr %}<span>ACWR <b>{{ c.acwr.ratio }}</b></span>{% endif %}
+            {% if c.adherence %}<span>Aderência <b>{{ c.adherence.pct }}%</b></span>{% endif %}
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card"><p class="muted" style="margin:0">Nenhum atleta ativo ainda. Crie um convite abaixo.</p></div>
+  {% endif %}
+
+  <p class="section-label">Convidar atleta</p>
+  <div class="card">
+    <form action="{% url 'coach_invite' %}" method="post" class="form-grid">
+      {% csrf_token %}
+      <label class="field" style="margin:0">
+        <span>Nome/apelido do atleta (opcional)</span>
+        <input type="text" name="label" placeholder="Ex.: João Silva">
+      </label>
+      <div class="field" style="margin:0;display:flex;align-items:flex-end">
+        <button class="btn btn-primary" type="submit">Gerar código de convite</button>
+      </div>
+    </form>
+
+    {% if pending %}
+      <p class="section-label" style="margin-top:18px">Convites pendentes</p>
+      {% for p in pending %}
+        <div class="pending-row">
+          <span>{{ p.label|default:"Sem nome" }}</span>
+          <span class="invite-code">{{ p.invite_code }}</span>
+        </div>
+      {% endfor %}
+      <p class="card-sub">Envie o código ao atleta. Ele entra em <b>Aceitar convite</b> para vincular.</p>
+    {% endif %}
+  </div>
+
+{% endif %}
+{% endblock %}

@@ -31,10 +31,15 @@ ALLOWED_HOSTS = [
 # Aceita os dominios das hospedagens suportadas (Heroku e Render).
 ALLOWED_HOSTS.append(".herokuapp.com")
 ALLOWED_HOSTS.append(".onrender.com")
-# Render expoe o host externo nesta variavel.
+ALLOWED_HOSTS.append(".up.railway.app")
+ALLOWED_HOSTS.append(".railway.app")
+# Render e Railway expoem o host externo nestas variaveis.
 _render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 if _render_host:
     ALLOWED_HOSTS.append(_render_host)
+_railway_host = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+if _railway_host:
+    ALLOWED_HOSTS.append(_railway_host)
 
 CSRF_TRUSTED_ORIGINS = [
     o.strip()
@@ -43,6 +48,10 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 CSRF_TRUSTED_ORIGINS.append("https://*.herokuapp.com")
 CSRF_TRUSTED_ORIGINS.append("https://*.onrender.com")
+CSRF_TRUSTED_ORIGINS.append("https://*.up.railway.app")
+CSRF_TRUSTED_ORIGINS.append("https://*.railway.app")
+if _railway_host:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{_railway_host}")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

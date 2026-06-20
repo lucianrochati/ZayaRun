@@ -36,8 +36,13 @@ CACHE_TTL = 60 * 60  # 1h
 # --------------------------------------------------------------------------
 # Sinais (contexto) extraidos dos treinos — base para os dois geradores
 # --------------------------------------------------------------------------
-def build_context(activities):
-    """Resume os dados do atleta em sinais simples e serializaveis."""
+def build_context(activities, athlete=None):
+    """
+    Resume os dados do atleta em sinais simples e serializaveis.
+
+    Se `athlete` for informado, agrega tambem sinais subjetivos (wellness:
+    PSE recente, sono, dor) — sempre apenas os que existem de fato.
+    """
     runs = metrics.only_runs(activities)
     if not runs:
         return None
@@ -68,20 +73,38 @@ def build_context(activities):
             "fade_pct": _split_fade(last),
         },
     }
+    if athlete is not None:
+        wellness = _wellness_signals(athlete)
+        if wellness:
+            ctx["wellness"] = wellness
     return ctx
 
 
+def _wellness_signals(athlete):
+    """Sinais subjetivos recentes (apenas os preenchidos; nunca inventados)."""
+    from runner.models import DailyCheckin, WorkoutFeedback
+
+    out = {}
+    checkin = DailyCheckin.objects.filter(athlete=athlete).first()
+    if checkin:
+        for field in ("sleep_hours", "sleep_quality", "soreness", "stress", "resting_hr", "hrv_ms"):
+            value = getattr(checkin, field)
+            if value is not None:
+                out[field] = value
+    since = timezone.localdate() - timedelta(days=14)
+    rpes = [
+        f.rpe
+        for f in WorkoutFeedback.objects.filter(athlete=athlete, date__gte=since)
+        if f.rpe is not None
+    ]
+    if rpes:
+        out["avg_rpe_14d"] = round(sum(rpes) / len(rpes), 1)
+    return out or None
+
+
 def _split_fade(activity):
-    """% de queda de pace entre a 1a e a 2a metade (positivo = perdeu ritmo)."""
-    splits = [s for s in (activity.splits or []) if s.get("pace_seconds_per_km")]
-    if len(splits) < 4:
-        return None
-    half = len(splits) // 2
-    first = sum(s["pace_seconds_per_km"] for s in splits[:half]) / half
-    second = sum(s["pace_seconds_per_km"] for s in splits[half:]) / (len(splits) - half)
-    if first <= 0:
-        return None
-    return round((second - first) / first * 100, 1)
+    """% de queda de pace entre 1a e 2a metade. Centralizado em metrics."""
+    return metrics.split_fade(activity)
 
 
 # --------------------------------------------------------------------------
@@ -89,7 +112,7 @@ def _split_fade(activity):
 # --------------------------------------------------------------------------
 def daily_insight(activities, user=None):
     """Retorna o insight do dia, ou None se nao houver corridas."""
-    ctx = build_context(activities)
+    ctx = build_context(activities, athlete=user)
     if not ctx:
         return None
 

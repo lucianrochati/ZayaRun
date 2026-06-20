@@ -1,0 +1,92 @@
+{% extends "runner/base.html" %}
+{% block title %}{{ athlete_name }} · Treinador · ZayaRun{% endblock %}
+{% block content %}
+<p style="margin-top:4px"><a class="link-btn" href="{% url 'coach_dashboard' %}">← Voltar ao time</a></p>
+
+<div class="page-head">
+  <div><p class="eyebrow">Atleta</p><h1>{{ athlete_name }}</h1></div>
+</div>
+
+<!-- Visão geral -->
+<section class="kpis" style="margin-top:14px">
+  <article class="kpi"><span class="kpi-label">Distância (período)</span>
+    <span class="kpi-value">{{ summary.total_distance_km }}<small>km</small></span></article>
+  <article class="kpi"><span class="kpi-label">Pace médio</span>
+    <span class="kpi-value">{{ summary.avg_pace_str }}<small>/km</small></span></article>
+  <article class="kpi"><span class="kpi-label">Corridas</span>
+    <span class="kpi-value">{{ summary.count }}</span></article>
+  {% if adherence %}
+  <article class="kpi"><span class="kpi-label">Aderência (28d)</span>
+    <span class="kpi-value">{{ adherence.pct }}<small>%</small></span></article>
+  {% endif %}
+</section>
+
+{% if acwr %}
+<div class="card">
+  <div class="card-head"><h3>Carga de treino</h3><span class="pill pill-{{ acwr.zone }}">{{ acwr.status }}</span></div>
+  <p class="insight-value acwr-{{ acwr.zone }}">{{ acwr.ratio }}<small style="font-size:14px"> ACWR</small></p>
+  <div class="meter"><i style="width:{{ acwr.bar_pct }}%"></i></div>
+  <p class="card-sub">{{ acwr.label }} · aguda {{ acwr.acute_km }} km / crônica {{ acwr.chronic_week_km }} km</p>
+</div>
+{% endif %}
+
+<!-- Semana prescrita -->
+<div class="page-head" style="margin-top:8px">
+  <p class="section-label" style="margin:0">Semana de {{ week.monday|date:"d/m" }}</p>
+  <form action="{% url 'auto_prescribe_week' athlete.id %}" method="post" class="inline">
+    {% csrf_token %}
+    <button class="btn btn-sm" type="submit" title="Gerar a próxima semana com IA">✨ Gerar semana (IA)</button>
+  </form>
+</div>
+{% if not ai_enabled %}<p class="card-sub" style="margin:0 4px 6px">A geração usa regras de progressão; ligue a IA (ANTHROPIC_API_KEY) para a nota do treinador.</p>{% endif %}
+{% include "runner/_planned_week.html" with week=week %}
+
+<!-- Prescrever um treino -->
+<p class="section-label">Prescrever um treino</p>
+<div class="card">
+  <form action="{% url 'prescribe_workout' athlete.id %}" method="post" class="form-grid">
+    {% csrf_token %}
+    <label class="field" style="margin:0"><span>Data</span>
+      <input type="date" name="date" value="{{ today|date:'Y-m-d' }}" required></label>
+    <label class="field" style="margin:0"><span>Tipo</span>
+      <select name="workout_type">
+        {% for key, label in workout_types %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select></label>
+    <label class="field" style="margin:0"><span>Distância (km)</span>
+      <input type="number" name="distance_km" step="0.1" min="0" placeholder="Ex.: 10"></label>
+    <label class="field" style="margin:0"><span>Pace-alvo (m:ss/km)</span>
+      <input type="text" name="pace" placeholder="Ex.: 5:30"></label>
+    <label class="field field-full" style="margin:0"><span>Título (opcional)</span>
+      <input type="text" name="title" placeholder="Ex.: Longão progressivo"></label>
+    <label class="field field-full" style="margin:0"><span>Instruções</span>
+      <textarea name="description" placeholder="Ex.: ritmo confortável; últimos 3 km mais fortes."></textarea></label>
+    <div class="field-full"><button class="btn btn-primary" type="submit">Prescrever treino</button></div>
+  </form>
+</div>
+
+<!-- Plano de prova -->
+<p class="section-label">Plano de prova</p>
+<div class="card">
+  {% if plan %}
+    <div class="card-head"><h3>{{ plan.goal_label }} — {{ plan.goal_race_date|date:"d/m/Y" }}</h3>
+      <span class="pill pill-baixa">{{ plan.weeks_to_race }} sem</span></div>
+    <p class="card-sub">Base {{ plan.weekly_base_km }} km/sem · pico {{ plan.peak_weekly_km }} km/sem · gerado por {{ plan.get_generated_by_display|default:plan.generated_by }}.</p>
+    <p class="card-sub">Recriar o plano abaixo substitui os treinos futuros ainda não realizados.</p>
+  {% endif %}
+  <form action="{% url 'create_plan' athlete.id %}" method="post" class="form-grid" style="margin-top:8px">
+    {% csrf_token %}
+    <label class="field" style="margin:0"><span>Prova-alvo</span>
+      <select name="goal_distance_m">
+        {% for m, label in race_choices %}<option value="{{ m }}">{{ label }}</option>{% endfor %}
+      </select></label>
+    <label class="field" style="margin:0"><span>Data da prova</span>
+      <input type="date" name="race_date" required></label>
+    <label class="field" style="margin:0"><span>Meta de tempo (opcional)</span>
+      <input type="text" name="goal_time" placeholder="Ex.: 1:45:00"></label>
+    <div class="field" style="margin:0;display:flex;align-items:flex-end">
+      <button class="btn btn-primary" type="submit">{% if plan %}Recriar plano{% else %}Criar plano{% endif %}</button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

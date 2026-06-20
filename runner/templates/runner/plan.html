@@ -1,0 +1,104 @@
+{% extends "runner/base.html" %}
+{% block title %}Meu plano · ZayaRun{% endblock %}
+{% block content %}
+
+<div class="page-head"><div><p class="eyebrow">Plano</p><h1>Meu plano de prova</h1></div></div>
+
+<!-- Prontidão de hoje (heurística transparente) -->
+{% if readiness %}
+<div class="card">
+  <div class="card-head"><h3>Prontidão de hoje</h3><span class="pill pill-{{ readiness.zone }}">{{ readiness.label }}</span></div>
+  <p class="insight-value acwr-{{ readiness.zone }}">{{ readiness.score }}<small style="font-size:14px">/100</small></p>
+  <div class="meter"><i style="width:{{ readiness.score }}%"></i></div>
+  <p class="card-sub">{% for f in readiness.factors %}{{ f }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+  <p class="card-sub" style="color:var(--faint)">Índice heurístico (carga + percepção + check-in). HRV e sono entram quando a Garmin for integrada.</p>
+</div>
+{% endif %}
+
+<!-- Check-in do dia -->
+{% if not today_checkin %}
+<div class="card">
+  <div class="card-head"><h3>Check-in de hoje</h3></div>
+  <p class="card-sub" style="margin-top:0">Como você está? Isso afina sua prontidão e calibra os próximos treinos.</p>
+  <form action="{% url 'daily_checkin' %}" method="post" class="form-grid">
+    {% csrf_token %}
+    <label class="field" style="margin:0"><span>Sono (horas)</span>
+      <input type="number" name="sleep_hours" step="0.5" min="0" max="14" placeholder="Ex.: 7.5"></label>
+    <label class="field" style="margin:0"><span>Qualidade do sono (1–5)</span>
+      <input type="number" name="sleep_quality" min="1" max="5"></label>
+    <label class="field" style="margin:0"><span>Dor muscular (1–5)</span>
+      <input type="number" name="soreness" min="1" max="5"></label>
+    <label class="field" style="margin:0"><span>Estresse (1–5)</span>
+      <input type="number" name="stress" min="1" max="5"></label>
+    <div class="field-full"><button class="btn btn-primary" type="submit">Salvar check-in</button></div>
+  </form>
+</div>
+{% else %}
+<p class="card-sub" style="margin-left:4px">✓ Check-in de hoje registrado.</p>
+{% endif %}
+
+{% if plan %}
+  <div class="card">
+    <div class="card-head">
+      <h3>{{ plan.goal_label }}</h3>
+      <span class="pill pill-baixa">{{ plan.weeks_to_race }} semanas para a prova</span>
+    </div>
+    <div class="plan-summary">
+      <article class="kpi"><span class="kpi-label">Prova</span>
+        <span class="kpi-value" style="font-size:18px">{{ plan.goal_race_date|date:"d/m/Y" }}</span></article>
+      <article class="kpi"><span class="kpi-label">Base</span>
+        <span class="kpi-value">{{ plan.weekly_base_km }}<small>km/sem</small></span></article>
+      <article class="kpi"><span class="kpi-label">Pico</span>
+        <span class="kpi-value">{{ plan.peak_weekly_km }}<small>km/sem</small></span></article>
+      {% if plan.goal_time_s %}
+      <article class="kpi"><span class="kpi-label">Meta</span>
+        <span class="kpi-value" style="font-size:18px">definida</span></article>
+      {% endif %}
+    </div>
+  </div>
+
+  <p class="section-label">Esta semana</p>
+  {% include "runner/_planned_week.html" with week=week %}
+
+  <p class="section-label">Próximos treinos</p>
+  <div class="card">
+    <ul class="act-list">
+      {% for w in upcoming %}
+        <li><span class="act-row">
+          <span class="act-ico wt-{{ w.workout_type }}" style="background:rgba(91,141,239,.12)">{{ w.date|date:"d" }}</span>
+          <span class="act-body">
+            <span class="act-name">{{ w.title }}</span>
+            <span class="act-meta">{{ w.date|date:"d/m" }}{% if w.target_distance_km %} · {{ w.target_distance_km }} km{% endif %}{% if w.target_pace_str %} · {{ w.target_pace_str }}/km{% endif %}</span>
+          </span>
+        </span></li>
+      {% empty %}
+        <li><p class="muted" style="margin:0">Sem treinos futuros. Recrie o plano para gerar mais semanas.</p></li>
+      {% endfor %}
+    </ul>
+  </div>
+{% else %}
+  <div class="card">
+    <p class="muted" style="margin-top:0">Você ainda não tem um plano. Escolha sua prova-alvo e o ZayaRun monta o
+       macrociclo — progressão de volume, sessões-chave e polimento até o dia da prova.</p>
+  </div>
+{% endif %}
+
+<p class="section-label">{% if plan %}Recriar plano{% else %}Criar meu plano{% endif %}</p>
+<div class="card">
+  {% if plan %}<p class="card-sub" style="margin-top:0">Recriar substitui os treinos futuros ainda não realizados, recalculando pela sua forma atual.</p>{% endif %}
+  <form action="{% url 'create_my_plan' %}" method="post" class="form-grid" style="margin-top:8px">
+    {% csrf_token %}
+    <label class="field" style="margin:0"><span>Prova-alvo</span>
+      <select name="goal_distance_m">
+        {% for m, label in race_choices %}<option value="{{ m }}">{{ label }}</option>{% endfor %}
+      </select></label>
+    <label class="field" style="margin:0"><span>Data da prova</span>
+      <input type="date" name="race_date" required></label>
+    <label class="field" style="margin:0"><span>Meta de tempo (opcional)</span>
+      <input type="text" name="goal_time" placeholder="Ex.: 50:00"></label>
+    <div class="field" style="margin:0;display:flex;align-items:flex-end">
+      <button class="btn btn-primary" type="submit">{% if plan %}Recriar plano{% else %}Gerar plano{% endif %}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
