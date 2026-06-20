@@ -54,8 +54,8 @@ def build_authorize_url(redirect_uri=None, state=""):
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
 
-def exchange_code_for_token(user, code):
-    """Troca o `code` do callback por tokens e salva para o usuario."""
+def exchange_code_raw(code):
+    """Troca o `code` do callback por tokens e devolve o JSON cru (sem salvar)."""
     resp = requests.post(
         TOKEN_URL,
         data={
@@ -69,8 +69,11 @@ def exchange_code_for_token(user, code):
     if resp.status_code != 200:
         logger.error("Falha na troca de token Strava: %s", resp.text)
         raise StravaError("Nao foi possivel autenticar com a Strava.")
+    return resp.json()
 
-    data = resp.json()
+
+def save_token(user, data):
+    """Persiste (ou atualiza) o token da Strava para um usuario."""
     athlete = data.get("athlete") or {}
     token, _ = StravaToken.objects.update_or_create(
         user=user,
@@ -83,6 +86,48 @@ def exchange_code_for_token(user, code):
         },
     )
     return token
+
+
+def exchange_code_for_token(user, code):
+    """Troca o `code` por tokens e salva para o usuario (fluxo de conexao)."""
+    return save_token(user, exchange_code_raw(code))
+
+
+def get_or_create_user_from_athlete(data):
+    """
+    Login com Strava: encontra ou cria o usuario do ZayaRun a partir do atleta
+    autenticado. Reusa o usuario se ja houver um token desse athlete_id.
+    Usuarios criados aqui logam SO via Strava (senha inutilizavel).
+    """
+    from django.contrib.auth import get_user_model
+
+    from runner.models import Profile
+
+    athlete = data.get("athlete") or {}
+    athlete_id = athlete.get("id")
+    if not athlete_id:
+        raise StravaError("A Strava nao retornou o atleta; tente novamente.")
+
+    existing = (
+        StravaToken.objects.filter(athlete_id=athlete_id)
+        .select_related("user")
+        .first()
+    )
+    if existing:
+        return existing.user
+
+    User = get_user_model()
+    user, created = User.objects.get_or_create(username=f"strava_{athlete_id}")
+    if created:
+        user.first_name = (athlete.get("firstname") or "")[:150]
+        user.last_name = (athlete.get("lastname") or "")[:150]
+        user.set_unusable_password()
+        user.save()
+        name = " ".join(
+            p for p in [athlete.get("firstname"), athlete.get("lastname")] if p
+        ).strip()
+        Profile.objects.get_or_create(user=user, defaults={"display_name": name})
+    return user
 
 
 def _refresh_token(token):

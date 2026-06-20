@@ -229,6 +229,8 @@ canvas{max-width:100%}
 }
 .field input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(255,90,54,.18)}
 .err{color:var(--bad);font-size:13px}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--faint);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--border)}
 
 /* ---------- Misc ---------- */
 .muted{color:var(--muted)} .small{font-size:13px}

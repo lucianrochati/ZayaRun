@@ -7,6 +7,7 @@ urlpatterns = [
     # Lado-corredor (existente)
     path("", views.dashboard, name="dashboard"),
     path("strava/connect/", views.strava_connect, name="strava_connect"),
+    path("strava/login/", views.strava_login, name="strava_login"),
     path("strava/callback/", views.strava_callback, name="strava_callback"),
     path("strava/sync/", views.strava_sync, name="strava_sync"),
     path("strava/disconnect/", views.strava_disconnect, name="strava_disconnect"),

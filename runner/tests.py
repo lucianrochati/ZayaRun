@@ -460,6 +460,52 @@ class ViewSmokeTests(TestCase):
         self.assertEqual(self.client.get(reverse("my_plan")).status_code, 200)
 
 
+@override_settings(STORAGES={
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+})
+class StravaLoginTests(TestCase):
+    """Login COM Strava: criação/reuso de usuário a partir do atleta (sem rede)."""
+
+    def _data(self, athlete_id, first="João", last="Silva"):
+        return {
+            "access_token": "a", "refresh_token": "r",
+            "expires_at": int(timezone.now().timestamp()) + 3600, "scope": "read",
+            "athlete": {"id": athlete_id, "firstname": first, "lastname": last},
+        }
+
+    def test_creates_user_from_athlete(self):
+        from runner.services import strava
+
+        user = strava.get_or_create_user_from_athlete(self._data(999))
+        self.assertEqual(user.username, "strava_999")
+        self.assertFalse(user.has_usable_password())
+        self.assertEqual(user.profile.display_name, "João Silva")
+
+    def test_is_idempotent(self):
+        from runner.services import strava
+
+        u1 = strava.get_or_create_user_from_athlete(self._data(777))
+        u2 = strava.get_or_create_user_from_athlete(self._data(777))
+        self.assertEqual(u1.pk, u2.pk)
+
+    def test_reuses_user_with_existing_token(self):
+        from runner.models import StravaToken
+        from runner.services import strava
+
+        u = User.objects.create_user("existente", password="x")
+        StravaToken.objects.create(
+            user=u, athlete_id=555, access_token="a", refresh_token="r",
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+        self.assertEqual(strava.get_or_create_user_from_athlete(self._data(555)).pk, u.pk)
+
+    def test_login_page_has_strava_button(self):
+        resp = Client().get(reverse("login"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, reverse("strava_login"))
+
+
 class WellnessTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user("well", password="x")

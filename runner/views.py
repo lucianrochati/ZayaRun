@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -105,20 +106,52 @@ def strava_connect(request):
     )
 
 
-@login_required
+def strava_login(request):
+    """Inicia o login COM Strava (usuario anonimo): autoriza e cria a conta."""
+    if not strava.is_configured():
+        messages.error(request, "Login com Strava indisponivel (nao configurado).")
+        return redirect("login")
+    redirect_uri = request.build_absolute_uri(reverse("strava_callback"))
+    if not settings.DEBUG:
+        redirect_uri = redirect_uri.replace("http://", "https://", 1)
+    return redirect(
+        strava.build_authorize_url(redirect_uri=redirect_uri, state="login")
+    )
+
+
 def strava_callback(request):
-    """Recebe o retorno do OAuth e troca o code por tokens."""
+    """
+    Retorno do OAuth da Strava. Serve para os dois fluxos:
+      - usuario logado  -> conecta a Strava a conta atual;
+      - usuario anonimo -> cria/loga a conta a partir do atleta (login Strava).
+    """
     error = request.GET.get("error")
     code = request.GET.get("code")
     if error or not code:
         messages.error(request, "Autorizacao da Strava cancelada ou invalida.")
         return redirect("dashboard")
+
     try:
-        strava.exchange_code_for_token(request.user, code)
-        messages.success(request, "Strava conectada! Sincronizando seus treinos...")
-        created, updated = strava.sync_activities(request.user)
+        data = strava.exchange_code_raw(code)
+    except strava.StravaError as exc:
+        messages.error(request, str(exc))
+        return redirect("login")
+
+    if request.user.is_authenticated:
+        user = request.user
+    else:
+        try:
+            user = strava.get_or_create_user_from_athlete(data)
+        except strava.StravaError as exc:
+            messages.error(request, str(exc))
+            return redirect("login")
+        auth_login(request, user)
+
+    try:
+        strava.save_token(user, data)
+        created, updated = strava.sync_activities(user)
         messages.success(
-            request, f"{created} treinos novos, {updated} atualizados."
+            request, f"Strava conectada! {created} treinos novos, {updated} atualizados."
         )
     except strava.StravaError as exc:
         messages.error(request, str(exc))
