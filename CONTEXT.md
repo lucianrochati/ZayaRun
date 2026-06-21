@@ -94,13 +94,29 @@ python manage.py runserver
 | `INSIGHT_MODEL` | `claude-opus-4-8` (padrão) |
 
 ## 7. Estado do deploy
-- Repo tornado **público** para o botão de deploy funcionar.
-- Já existiu tentativa no **Heroku** (esbarrou em cartão/cobrança).
-- Caminho gratuito documentado: **Render** (web free + Postgres free) via `render.yaml`.
-- Usuário tem conta **Railway** (intenção de usar). Pendência: ajustar `ALLOWED_HOSTS`/CSRF para `.up.railway.app`
-  e definir start command (`gunicorn zayarun.wsgi`) + migração no deploy.
+- **No ar no Railway** (serviço `web` + Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn;
+  `settings.py` libera `.up.railway.app`/`.railway.app`; `runtime.txt` em **3.12.10** (corrige bug de attestation do mise).
+- `DATABASE_URL` no serviço web referencia `${{Postgres.DATABASE_URL}}` (host interno só funciona dentro do Railway).
+- `seed_demo` popula treinador/atleta demo (rodar via URL pública do Postgres com `railway run`).
+- Login com Strava existe, mas **bloqueado pela cota de atletas conectados** da Strava (apps não aprovados ≈ só o dono);
+  pedir aumento na Strava para distribuir a testers.
+- Alternativas documentadas: Render (`render.yaml`) e Heroku (`app.json`).
 
 ## 8. PENDÊNCIAS / próximos passos (priorizado)
+
+### 🐛 BUGS A CORRIGIR — PRIORIDADE (reportados 2026-06-20)
+1. **Plano começa no futuro, não hoje.** Criado hoje, o plano inicia ~2 meses depois (ex.: 17/08).
+   **Esperado:** começar JÁ, no próximo dia disponível da agenda (se hoje é sábado, domingo já é treino).
+   **Causa:** `plans.generate_plan` limita `n` a `MAX_WEEKS=20` e faz `first_monday = race_monday - (n-1) semanas`;
+   com a prova a >20 semanas, o início é empurrado pra frente. **Corrigir:** ancorar o início na semana ATUAL
+   (a partir do próximo dia disponível) e, se a prova é distante, fazer fase de base começando agora — nunca adiar o início.
+2. **KM não batem (título × descrição × alvo).** Ex.: "Rodagem + educativos" alvo 5,6 km mas a descrição diz
+   "6 km soltos"; "Longão" título "9 km" mas alvo 8,9 km. **Causa:** formatação `:.0f` nos títulos/descrições
+   arredonda, enquanto `target_distance_km` mostra 1 casa; e os 6×100m (600 m) dos educativos não entram no alvo.
+   Locais: `plans._quality_session` (base) e `plans.build_week` (longão). **Corrigir:** um único número coerente
+   entre título, descrição e `target_distance_m` (somar os educativos ao alvo ou arredondar igual em todos).
+
+### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
 2. **Publicação na Google Play (TWA)** — app é web, entra como PWA empacotada:
    - falta **service worker** (offline) no PWA;
@@ -124,5 +140,5 @@ python manage.py runserver
 - **Segurança:** repo é público — nenhum segredo deve ser commitado (secret/admin/API key só em Config Vars).
 
 ## 10. Como retomar
-Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`python manage.py test`) para confirmar baseline (45 OK),
-escolher o item 1 ou 2 da seção 8 e seguir.
+Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`.\.venv\Scripts\python.exe manage.py test`) para confirmar
+baseline (**62 OK**). **Próximo passo recomendado: os 2 BUGS no topo da seção 8** (início do plano no futuro + KM que não batem).
