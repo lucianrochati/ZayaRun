@@ -299,6 +299,35 @@ class PlanGeneratorTests(TestCase):
         self.assertEqual(len(race_wks), 1)
         self.assertEqual(race_wks[0]["date"], race_date)
 
+    def test_plan_starts_now_even_for_distant_race(self):
+        """Prova distante (>20 sem) não pode adiar o início: começa nesta semana."""
+        from runner.services import plans
+
+        today = timezone.localdate()
+        race_date = today + timedelta(days=7 * 26 + 1)  # ~6 meses
+        spec = plans.generate_plan(self._activities(), 10_000, race_date)
+        first = min(w["date"] for w in spec["workouts"])
+        self.assertGreaterEqual(first, today)                 # nunca no passado
+        self.assertLess(first, today + timedelta(days=8))     # já nesta semana
+        self.assertEqual(spec["meta"]["start_date"], first)   # meta reflete o real
+        # E a prova continua ancorada no dia certo.
+        race_wks = [w for w in spec["workouts"] if w["workout_type"] == "race"]
+        self.assertEqual(race_wks[0]["date"], race_date)
+
+    def test_km_coherent_across_title_desc_target(self):
+        """O nº de km do alvo bate com título/descrição (sem 6 km × 5,6 km)."""
+        from runner.services import plans
+
+        race_date = timezone.localdate() + timedelta(days=7 * 12 + 1)
+        spec = plans.generate_plan(self._activities(), 10_000, race_date)
+        for w in spec["workouts"]:
+            if w["workout_type"] == "race" or not w.get("target_distance_m"):
+                continue
+            km = round(w["target_distance_m"] / 1000.0, 1)
+            km_txt = f"{km:.0f}" if abs(km - round(km)) < 0.05 else f"{km:.1f}"
+            haystack = f"{w['title']} {w['description']}"
+            self.assertIn(km_txt, haystack, msg=f"alvo {km_txt} ausente em: {haystack!r}")
+
     def test_volumes_positive_and_taper(self):
         from runner.services import plans
 

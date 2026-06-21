@@ -17,7 +17,36 @@ from django.utils import timezone
 from runner.models import PlannedWorkout, TrainingPlan, weekday_labels
 from runner.services import fitness, metrics
 
-MAX_WEEKS = 20  # planos mais longos começam no meio do caminho
+MAX_WEEKS = 28  # teto de semanas estruturadas (~6,5 meses); provas mais distantes
+                # ganham fase de base mais longa, mas o plano NUNCA adia o início.
+
+# --------------------------------------------------------------------------
+# Linguagem universal de intensidade (Z1–Z5) — falada em cada treino, e km
+# coerente entre título, descrição e alvo (target_distance_m).
+# --------------------------------------------------------------------------
+Z1 = "Z1 (regenerativo)"
+Z2 = "Z2 (fácil/aeróbico)"
+Z3 = "Z3 (moderado)"
+Z4 = "Z4 (limiar)"
+Z5 = "Z5 (forte/VO₂máx)"
+
+ZONES_LEGEND = [
+    ("Z1", "Regenerativo — muito leve, recuperação ativa"),
+    ("Z2", "Fácil/aeróbico — conversável, base da semana"),
+    ("Z3", "Moderado — ritmo de prova longa"),
+    ("Z4", "Limiar — controlado-forte, sustentável ~1h"),
+    ("Z5", "Forte/VO₂máx — tiros, respiração ofegante"),
+]
+
+
+def _tidy_km(km):
+    """Arredonda para 0,5 km: número 'limpo' e idêntico em título, descrição e alvo."""
+    return round(km * 2) / 2.0
+
+
+def _km_txt(km):
+    """Texto do nº de km igual ao chip do alvo: inteiro quando exato, senão 1 casa."""
+    return f"{km:.0f}" if abs(km - round(km)) < 0.05 else f"{km:.1f}"
 
 # Presets por distância-alvo. offsets = segundos somados ao pace de prova
 # (negativo = mais rápido). long_cap = teto do longão.
@@ -244,7 +273,8 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
             elif day < race_date and wd in pre_easy:
                 out.append({
                     "date": day, "weekday": wd, "workout_type": "easy",
-                    "title": "Rodagem leve", "description": "Solto, só para ativar.",
+                    "title": "Rodagem leve — 5 km",
+                    "description": f"5 km bem soltos em {Z1}–{Z2}, só para ativar as pernas.",
                     "target_distance_m": 5000, **_pace_kw(paces, "easy"), "structure": [],
                 })
         return out
@@ -252,16 +282,21 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
     long_days = [wd for wd, role in sched if role == "long"]
     quality_days = [wd for wd, role in sched if role == "quality"]
     easy_days = [wd for wd, role in sched if role == "easy"]
-    long_km = round(min(vol * 0.35, long_cap_km or preset["long_cap_km"]), 1)
-    quali_km = round(vol * 0.22, 1)
+    # Distâncias "limpas" (passo de 0,5 km) — o MESMO número aparece no título,
+    # na descrição e no alvo (target_distance_m), sem arredondamentos divergentes.
+    long_km = _tidy_km(min(vol * 0.35, long_cap_km or preset["long_cap_km"]))
+    quali_km = _tidy_km(vol * 0.22)
     easy_total = max(vol - long_km - quali_km, 0)
-    easy_each = round(easy_total / len(easy_days), 1) if easy_days else 0
+    easy_each = max(_tidy_km(easy_total / len(easy_days)), 1.0) if easy_days else 0
 
     for wd in long_days:
         out.append({
             "date": monday + timedelta(days=wd), "weekday": wd, "workout_type": "long",
-            "title": f"Longão {long_km:.0f} km",
-            "description": "Ritmo confortável e constante; construa resistência aeróbica.",
+            "title": f"Longão {_km_txt(long_km)} km",
+            "description": (
+                f"{_km_txt(long_km)} km em ritmo confortável e constante, "
+                f"{Z2} — construa resistência aeróbica."
+            ),
             "target_distance_m": long_km * 1000, **_pace_kw(paces, "long"), "structure": [],
         })
     for wd in quality_days:
@@ -269,8 +304,11 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
     for wd in easy_days:
         out.append({
             "date": monday + timedelta(days=wd), "weekday": wd, "workout_type": "easy",
-            "title": f"Rodagem {easy_each:.0f} km",
-            "description": "Conversável; base aeróbica e recuperação ativa.",
+            "title": f"Rodagem {_km_txt(easy_each)} km",
+            "description": (
+                f"{_km_txt(easy_each)} km conversáveis, {Z2} — "
+                "base aeróbica e recuperação ativa."
+            ),
             "target_distance_m": easy_each * 1000, **_pace_kw(paces, "easy"), "structure": [],
         })
     out.sort(key=lambda w: w["weekday"])
@@ -280,35 +318,44 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
 def _quality_session(date, phase, paces, preset, quali_km):
     wd = (date.weekday())
     if phase == "Base":
+        # Rodagem fácil + 6 tiros curtos de 100 m no fim (contam no alvo: +0,6 km).
+        strides_km = 0.6
+        total_km = quali_km + strides_km
         return {
             "date": date, "weekday": wd, "workout_type": "strides",
-            "title": "Rodagem + educativos",
-            "description": f"{quali_km:.0f} km soltos + 6×100m progressivos no fim.",
-            "target_distance_m": quali_km * 1000, **_pace_kw(paces, "easy"),
+            "title": f"Rodagem + tiros — {_km_txt(total_km)} km",
+            "description": (
+                f"{_km_txt(quali_km)} km soltos em {Z2} + 6×100 m progressivos no fim "
+                f"em {Z5} (acelere ao longo de cada tiro; caminhe para recuperar)."
+            ),
+            "target_distance_m": round(total_km * 1000), **_pace_kw(paces, "easy"),
             "structure": [{"reps": 6, "distance_m": 100, "note": "progressivo", "recovery": "caminhada"}],
         }
     if phase == "Construção":
         iv = preset["interval"]
-        total = iv["reps"] * iv["dist_m"] / 1000.0
+        work_km = iv["reps"] * iv["dist_m"] / 1000.0
+        total_km = work_km + 3  # aquecimento 2 km + tiros + 1 km solto
         return {
             "date": date, "weekday": wd, "workout_type": "interval",
-            "title": f"Intervalado {iv['reps']}×{iv['dist_m']}m",
+            "title": f"Intervalado {iv['reps']}×{iv['dist_m']} m",
             "description": (
-                f"Aquecimento 2 km + {iv['reps']}×{iv['dist_m']}m forte "
-                f"({iv['rec']}) + 1 km solto. Total útil ~{total:.0f} km."
+                f"Aquecimento 2 km em {Z2} + {iv['reps']}×{iv['dist_m']} m forte em {Z5} "
+                f"({iv['rec']}) + 1 km solto. Volume total ≈ {_km_txt(total_km)} km."
             ),
-            "target_distance_m": (total + 3) * 1000, **_pace_kw(paces, "interval"),
+            "target_distance_m": round(total_km * 1000), **_pace_kw(paces, "interval"),
             "structure": [{"reps": iv["reps"], "distance_m": iv["dist_m"], "recovery": iv["rec"]}],
         }
     # Pico (e demais): ritmo/limiar
+    tempo_km = preset["tempo_km"]
+    total_km = tempo_km + 3  # aquecimento 2 km + ritmo + 1 km solto
     return {
         "date": date, "weekday": wd, "workout_type": "tempo",
-        "title": f"Ritmo {preset['tempo_km']} km",
+        "title": f"Ritmo no limiar — {_km_txt(total_km)} km",
         "description": (
-            f"Aquecimento 2 km + {preset['tempo_km']} km contínuos no pace de "
-            f"limiar + 1 km solto."
+            f"Aquecimento 2 km em {Z2} + {_km_txt(tempo_km)} km contínuos no limiar em "
+            f"{Z4} + 1 km solto em {Z2}. Total {_km_txt(total_km)} km."
         ),
-        "target_distance_m": (preset["tempo_km"] + 3) * 1000, **_pace_kw(paces, "tempo"),
+        "target_distance_m": round(total_km * 1000), **_pace_kw(paces, "tempo"),
         "structure": [],
     }
 
@@ -369,9 +416,15 @@ def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None,
 
     race_monday = goal_race_date - timedelta(days=goal_race_date.weekday())
     this_monday = today - timedelta(days=today.weekday())
-    n = ((race_monday - this_monday).days // 7) + 1
-    n = max(1, min(n, MAX_WEEKS))
-    first_monday = race_monday - timedelta(weeks=n - 1)
+    weeks_to_race = ((race_monday - this_monday).days // 7) + 1
+    n = max(1, min(weeks_to_race, MAX_WEEKS))
+    # Começa SEMPRE na semana atual quando a prova cabe no horizonte do plano
+    # (fase de base já começa hoje). Só para provas muito distantes (> MAX_WEEKS)
+    # recuamos o início para encaixar o macrociclo inteiro até a prova.
+    if weeks_to_race <= MAX_WEEKS:
+        first_monday = this_monday
+    else:
+        first_monday = race_monday - timedelta(weeks=n - 1)
 
     taper_weeks = min(preset["taper_weeks"], max(1, n - 1))
 
@@ -429,10 +482,16 @@ def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None,
             monday, week, paces, preset, goal_distance_m, race_date=goal_race_date,
             schedule=schedule, long_cap_km=long_cap_km,
         )
+        # Na semana atual, descarta os dias que já passaram — o plano começa no
+        # PRÓXIMO dia disponível (ex.: criado no sábado, domingo já é treino).
+        if i == 0:
+            day_workouts = [w for w in day_workouts if w["date"] >= today]
         for w in day_workouts:
             w["week_no"] = week["week_no"]
             w["phase"] = week["phase"]
         workouts.extend(day_workouts)
+
+    actual_start = min((w["date"] for w in workouts), default=first_monday)
 
     return {
         "meta": {
@@ -455,7 +514,8 @@ def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None,
             "safety_warnings": warnings,
             "conservative": conservative,
             "profile": profile,
-            "start_date": first_monday,
+            "start_date": actual_start,
+            "zones_legend": ZONES_LEGEND,
         },
         "weeks": weeks,
         "workouts": workouts,

@@ -369,7 +369,10 @@ class PlannedWorkout(models.Model):
 
     @property
     def target_distance_km(self):
-        return round(self.target_distance_m / 1000.0, 1) if self.target_distance_m else None
+        if not self.target_distance_m:
+            return None
+        km = round(self.target_distance_m / 1000.0, 1)
+        return int(km) if km == int(km) else km  # 9 em vez de 9.0; 8.9 fica 8.9
 
     @property
     def target_pace_str(self):

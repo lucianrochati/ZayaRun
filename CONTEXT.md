@@ -45,7 +45,7 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Compliance Strava:** ao desconectar, purga atividades + perfil (exigência dos termos).
 - **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
 - **Deploy:** no ar no **Railway** (Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn; `runtime.txt` em 3.12.10 (fix mise). `seed_demo` popula treinador/atleta demo.
-- **Testes:** 62 passando (`python manage.py test`).
+- **Testes:** 64 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
@@ -104,17 +104,19 @@ python manage.py runserver
 
 ## 8. PENDÊNCIAS / próximos passos (priorizado)
 
-### 🐛 BUGS A CORRIGIR — PRIORIDADE (reportados 2026-06-20)
-1. **Plano começa no futuro, não hoje.** Criado hoje, o plano inicia ~2 meses depois (ex.: 17/08).
-   **Esperado:** começar JÁ, no próximo dia disponível da agenda (se hoje é sábado, domingo já é treino).
-   **Causa:** `plans.generate_plan` limita `n` a `MAX_WEEKS=20` e faz `first_monday = race_monday - (n-1) semanas`;
-   com a prova a >20 semanas, o início é empurrado pra frente. **Corrigir:** ancorar o início na semana ATUAL
-   (a partir do próximo dia disponível) e, se a prova é distante, fazer fase de base começando agora — nunca adiar o início.
-2. **KM não batem (título × descrição × alvo).** Ex.: "Rodagem + educativos" alvo 5,6 km mas a descrição diz
-   "6 km soltos"; "Longão" título "9 km" mas alvo 8,9 km. **Causa:** formatação `:.0f` nos títulos/descrições
-   arredonda, enquanto `target_distance_km` mostra 1 casa; e os 6×100m (600 m) dos educativos não entram no alvo.
-   Locais: `plans._quality_session` (base) e `plans.build_week` (longão). **Corrigir:** um único número coerente
-   entre título, descrição e `target_distance_m` (somar os educativos ao alvo ou arredondar igual em todos).
+### 🐛 BUGS — ✅ CORRIGIDOS (2026-06-20)
+1. ~~**Plano começa no futuro, não hoje.**~~ ✅ **FEITO.** Agora `generate_plan` ancora `first_monday = this_monday`
+   sempre que a prova cabe no horizonte (`MAX_WEEKS` subiu 20→28 ≈ 6,5 meses) e, na 1ª semana, descarta os dias que
+   já passaram — o plano começa no **próximo dia disponível** (sábado → domingo já é treino). `meta.start_date`
+   passou a refletir o 1º treino real. Provas a >28 sem ainda recuam o início só o necessário para caber o macrociclo.
+2. ~~**KM não batem (título × descrição × alvo).**~~ ✅ **FEITO.** Distâncias arredondadas a passo de 0,5 km
+   (`_tidy_km`) e formatadas com a MESMA regra do chip (`_km_txt`): título = descrição = `target_distance_m`.
+   Os 6×100 m (0,6 km) dos tiros **entram no alvo**. `models.PlannedWorkout.target_distance_km` agora mostra `9`
+   em vez de `9.0`. (Locais: `plans.build_week`, `plans._quality_session`, `models.py`.)
+3. **Zonas + linguagem (mesmo report).** ✅ Descrições falam **Z1–Z5** (linguagem universal de intensidade) e
+   "educativos" virou **"tiros progressivos"**. Legenda Z1–Z5 (colapsável) em `plan_detail.html`; constantes/legenda
+   em `plans.py` (`ZONES_LEGEND`, exposta em `meta.zones_legend`).
+   Testes: **64 passando** (+2: início no presente, km coerente).
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
@@ -141,4 +143,5 @@ python manage.py runserver
 
 ## 10. Como retomar
 Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`.\.venv\Scripts\python.exe manage.py test`) para confirmar
-baseline (**62 OK**). **Próximo passo recomendado: os 2 BUGS no topo da seção 8** (início do plano no futuro + KM que não batem).
+baseline (**64 OK**). Os 2 bugs prioritários (início no futuro + KM que não batem) e o ajuste de zonas/linguagem
+**já foram corrigidos** (topo da seção 8). Próximo passo: ver "Próximos passos" abaixo (host de produção / PWA / Play).

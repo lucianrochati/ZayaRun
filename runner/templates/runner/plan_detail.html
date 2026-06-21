@@ -49,6 +49,21 @@
 </div>
 {% endif %}
 
+<!-- Legenda das zonas de intensidade (linguagem universal Z1–Z5) -->
+<details class="add-details" style="margin-bottom:10px">
+  <summary class="btn btn-sm btn-ghost" style="display:inline-flex">🎯 Zonas de intensidade (Z1–Z5)</summary>
+  <div class="card" style="margin-top:10px">
+    <p class="card-sub" style="margin:0 0 8px">As descrições dos treinos usam estas zonas. Guie-se pelo esforço (e pelo pace-alvo de cada treino).</p>
+    <ul class="zone-legend" style="margin:0;padding-left:0;list-style:none">
+      <li><b>Z1</b> — Regenerativo: muito leve, recuperação ativa.</li>
+      <li><b>Z2</b> — Fácil/aeróbico: conversável, base da semana.</li>
+      <li><b>Z3</b> — Moderado: ritmo de prova longa.</li>
+      <li><b>Z4</b> — Limiar: controlado-forte, sustentável por ~1h.</li>
+      <li><b>Z5</b> — Forte/VO₂máx: tiros, respiração ofegante.</li>
+    </ul>
+  </div>
+</details>
+
 <!-- Macrociclo: semana a semana -->
 {% for week in weeks %}
   <div class="week-block {% if week.is_current %}week-current{% endif %} {% if week.is_past %}week-past{% endif %}">
