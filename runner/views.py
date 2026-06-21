@@ -26,6 +26,14 @@ from runner.services import insights, metrics, strava
 logger = logging.getLogger(__name__)
 
 
+def service_worker(request):
+    """Serve o service worker em /sw.js (escopo raiz) — necessário p/ instalar o PWA."""
+    resp = render(request, "runner/sw.js", content_type="application/javascript")
+    resp["Service-Worker-Allowed"] = "/"
+    resp["Cache-Control"] = "no-cache"  # sempre revalida → atualizações propagam rápido
+    return resp
+
+
 @login_required
 def dashboard(request):
     """Painel principal do corredor: metricas, evolucao e projecoes."""

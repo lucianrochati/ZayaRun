@@ -394,3 +394,23 @@ textarea{resize:vertical;min-height:70px}
 .feel-opt:has(input:checked){border-color:var(--brand);background:rgba(255,90,54,.12);color:var(--text)}
 .feedback-prompt{border-left:4px solid var(--warn);
   background:linear-gradient(180deg,rgba(251,191,36,.07),var(--surface) 70%)}
+
+/* ---------- Banner de instalação (PWA) ---------- */
+.pwa-install{position:fixed;left:12px;right:12px;bottom:16px;z-index:60;
+  display:flex;align-items:center;gap:12px;padding:12px 14px;
+  background:var(--surface-2);border:1px solid var(--border-strong);
+  border-radius:var(--r-md);box-shadow:var(--shadow-2);
+  animation:pwaUp .35s ease both}
+.pwa-install[hidden]{display:none}
+.has-nav .pwa-install{bottom:calc(72px + env(safe-area-inset-bottom,0px))}
+.pwa-ico{width:44px;height:44px;border-radius:12px;box-shadow:var(--shadow-1);flex:0 0 auto}
+.pwa-txt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.pwa-txt b{color:var(--text);font-size:14px}
+.pwa-txt span{color:var(--muted);font-size:12.5px;line-height:1.35}
+.pwa-actions{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:0 0 auto}
+.pwa-dismiss{font-size:12px;padding:2px 4px}
+@keyframes pwaUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media (max-width:420px){
+  .pwa-install{gap:10px}
+  .pwa-actions{flex-direction:row;align-items:center}
+}

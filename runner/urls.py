@@ -4,6 +4,9 @@ from django.urls import path
 from runner import views, views_coach
 
 urlpatterns = [
+    # PWA: service worker em escopo raiz (instalável + offline básico)
+    path("sw.js", views.service_worker, name="service_worker"),
+
     # Lado-corredor (existente)
     path("", views.dashboard, name="dashboard"),
     path("strava/connect/", views.strava_connect, name="strava_connect"),

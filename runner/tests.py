@@ -836,3 +836,19 @@ class AIProviderTests(TestCase):
         with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "k"}), \
                 self.settings(AI_PROVIDER="rules"):
             self.assertIsNone(ai.provider())
+
+
+class PWATests(TestCase):
+    """PWA: service worker em escopo raiz + banner de instalação."""
+
+    def test_service_worker_served_at_root(self):
+        resp = Client().get("/sw.js")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("javascript", resp["Content-Type"])
+        self.assertEqual(resp["Service-Worker-Allowed"], "/")
+        self.assertIn(b"addEventListener", resp.content)  # corpo real do SW
+
+    def test_install_banner_present(self):
+        resp = Client().get(reverse("login"))
+        self.assertContains(resp, "pwaInstall")          # banner existe
+        self.assertContains(resp, "/sw.js")              # registro do SW

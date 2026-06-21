@@ -1,0 +1,73 @@
+{% load static %}
+<div id="pwaInstall" class="pwa-install" hidden role="dialog" aria-label="Instalar o ZayaRun">
+  <img src="{% static 'runner/img/icon-192.png' %}" alt="" class="pwa-ico" width="44" height="44">
+  <div class="pwa-txt">
+    <b>Instale o ZayaRun</b>
+    <span id="pwaMsg">Treine como um app: tela cheia, abertura rápida e direto da sua tela inicial.</span>
+  </div>
+  <div class="pwa-actions">
+    <button id="pwaInstallBtn" class="btn btn-primary btn-sm" type="button" hidden>Instalar</button>
+    <button id="pwaDismiss" class="link-btn pwa-dismiss" type="button" aria-label="Fechar">Agora não</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    });
+  }
+
+  var banner = document.getElementById('pwaInstall');
+  if (!banner) return;
+  var installBtn = document.getElementById('pwaInstallBtn');
+  var dismissBtn = document.getElementById('pwaDismiss');
+  var msg = document.getElementById('pwaMsg');
+  var deferred = null;
+
+  var standalone = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  var isiOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent) && !window.MSStream;
+  var dismissed = sessionStorage.getItem('pwaDismissed') === '1';
+
+  function show() { if (!standalone && !dismissed) banner.hidden = false; }
+  function hide() { banner.hidden = true; }
+
+  // Android / Chrome desktop: captura o evento e oferece o botão "Instalar".
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferred = e;
+    installBtn.hidden = false;
+    show();
+  });
+
+  if (installBtn) {
+    installBtn.addEventListener('click', function () {
+      if (!deferred) return;
+      deferred.prompt();
+      deferred.userChoice.then(function () { deferred = null; hide(); });
+    });
+  }
+
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', function () {
+      dismissed = true;
+      sessionStorage.setItem('pwaDismissed', '1'); // some agora, volta na próxima sessão
+      hide();
+    });
+  }
+
+  window.addEventListener('appinstalled', function () {
+    hide();
+    localStorage.setItem('pwaInstalled', '1');
+  });
+
+  // iOS/Safari não dispara o prompt automático → mostra como adicionar à tela.
+  if (isiOS && !standalone) {
+    installBtn.hidden = true;
+    msg.innerHTML = 'No Safari: toque em <b>Compartilhar</b> (⬆️) e em <b>Adicionar à Tela de Início</b>.';
+    show();
+  }
+})();
+</script>
