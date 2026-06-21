@@ -6,6 +6,8 @@ from runner import views, views_coach
 urlpatterns = [
     # PWA: service worker em escopo raiz (instalável + offline básico)
     path("sw.js", views.service_worker, name="service_worker"),
+    # Diagnóstico da IA (só admin) — mostra o motivo exato de falhas do Gemini
+    path("ai/diag/", views.ai_diag, name="ai_diag"),
 
     # Lado-corredor (existente)
     path("", views.dashboard, name="dashboard"),

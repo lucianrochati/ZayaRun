@@ -35,6 +35,37 @@ def service_worker(request):
 
 
 @login_required
+def ai_diag(request):
+    """Diagnóstico da IA (só admin) — mostra provider, prefixo da chave e o motivo
+    EXATO de uma falha do Gemini (ex.: corpo do 429). Não vaza a chave."""
+    from django.http import Http404, HttpResponse
+
+    from runner.services import ai
+
+    if not request.user.is_staff:
+        raise Http404()
+    gk = ai.gemini_key()
+    fmt = (f"({gk[:6]}… {len(gk)} chars)"
+           + ("  ✅ AIza" if gk.startswith("AIza") else "  ⚠️ não-AIza")) if gk else "AUSENTE"
+    lines = [
+        f"AI_PROVIDER     : {getattr(settings, 'AI_PROVIDER', 'auto')}",
+        f"GEMINI_MODEL    : {getattr(settings, 'GEMINI_MODEL', '-')}",
+        f"provider()      : {ai.provider()}",
+        f"GEMINI_API_KEY  : {fmt}",
+        f"ANTHROPIC_KEY   : {'presente' if ai.anthropic_key() else 'ausente'}",
+        "-" * 64,
+    ]
+    if ai.provider() == "gemini":
+        text, debug = ai.gemini_request("Você é um teste.", "Responda apenas: pong.", max_tokens=50)
+        lines.append(f"gemini_request  : {debug}")
+        if text:
+            lines.append(f"resposta        : {text}")
+    else:
+        lines.append("(provider != gemini — nada a testar)")
+    return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
+
+
+@login_required
 def dashboard(request):
     """Painel principal do corredor: metricas, evolucao e projecoes."""
     has_strava = StravaToken.objects.filter(user=request.user).exists()
