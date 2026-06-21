@@ -5,9 +5,12 @@
 <div class="page-head"><div><p class="eyebrow">Copiloto</p><h1>Pergunte ao seu treinador IA</h1></div></div>
 
 {% if not ai_enabled %}
-  <div class="note-soft">O copiloto com IA precisa da variável <code>ANTHROPIC_API_KEY</code> configurada no ambiente.
+  <div class="note-soft">O copiloto com IA precisa de uma chave gratuita <code>GEMINI_API_KEY</code>
+    (Google AI Studio) — ou <code>ANTHROPIC_API_KEY</code> — no ambiente.
     Sem ela, ele responde apontando para os dados do seu painel.</div>
 {% endif %}
+
+<p class="card-sub" style="margin:0 0 10px 4px">💬 Falo <b>só de corrida</b>: pace, carga, zonas, plano e provas — sempre com base nos seus dados.</p>
 
 <div class="card">
   <form action="{% url 'copilot' %}" method="post" id="copilotForm">

@@ -48,6 +48,51 @@ def _km_txt(km):
     """Texto do nº de km igual ao chip do alvo: inteiro quando exato, senão 1 casa."""
     return f"{km:.0f}" if abs(km - round(km)) < 0.05 else f"{km:.1f}"
 
+
+def _pace_range_str(paces, kind):
+    """Faixa de pace de um tipo como 'm:ss–m:ss/km' (ou 'm:ss/km' se único)."""
+    lo, hi = paces.get(kind, (None, None))
+    if not lo and not hi:
+        return None
+    lo, hi = min(lo, hi), max(lo, hi)
+    if lo == hi:
+        return f"{metrics.format_pace(lo)}/km"
+    return f"{metrics.format_pace(lo)}–{metrics.format_pace(hi)}/km"
+
+
+def _intensity_policy(profile, conservative):
+    """
+    Calibra a INTENSIDADE-teto pelo nível REAL do atleta + blindagem clínica.
+
+    O *pace* dos tiros já vem do histórico (limiar) — aqui decidimos a ZONA-teto e
+    se o trabalho forte (Z5) é liberado. Iniciante OU versão conservadora (dor,
+    lesão, ACWR alto, pouco histórico) NÃO recebe Z5: os "tiros" viram progressivos
+    controlados (Z3) e o intervalado forte é trocado por ritmo controlado.
+    """
+    level = (profile or {}).get("experience_level", "beginner")
+    if conservative or level == "beginner":
+        return {
+            "hard": False,
+            "strides_zone": Z3,
+            "pace_kind": "tempo",  # referência de ritmo controlado p/ os progressivos
+            "strides_note": "acelere de forma controlada (sem sprint) e desacelere",
+        }
+    # intermediário e avançado: trabalho forte liberado
+    return {
+        "hard": True,
+        "strides_zone": Z5,
+        "pace_kind": "interval",
+        "strides_note": "acelere forte ao longo de cada tiro; caminhe para recuperar",
+    }
+
+
+# Política padrão (trabalho forte) — usada quando o chamador não calibra (ex.:
+# prescrição manual avulsa). generate_plan/auto_prescribe passam a calibrada.
+_DEFAULT_INTENSITY = {
+    "hard": True, "strides_zone": Z5, "pace_kind": "interval",
+    "strides_note": "acelere forte ao longo de cada tiro; caminhe para recuperar",
+}
+
 # Presets por distância-alvo. offsets = segundos somados ao pace de prova
 # (negativo = mais rápido). long_cap = teto do longão.
 RACE_PRESETS = OrderedDict(
@@ -251,10 +296,11 @@ def hard_days_adjacent(schedule):
 
 
 def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
-               schedule=None, long_cap_km=None):
+               schedule=None, long_cap_km=None, intensity=None):
     """Distribui o volume da semana nos dias da agenda (schedule)."""
     vol = week["volume_km"]
     out = []
+    intensity = intensity or _DEFAULT_INTENSITY
     sched = schedule or weekly_schedule([1, 2, 3, 4, 5, 6], preset["runs"], 6)
 
     # Semana da prova: rodagens leves nos dias disponíveis + a prova no dia certo.
@@ -300,7 +346,9 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
             "target_distance_m": long_km * 1000, **_pace_kw(paces, "long"), "structure": [],
         })
     for wd in quality_days:
-        out.append(_quality_session(monday + timedelta(days=wd), week["phase"], paces, preset, quali_km))
+        out.append(_quality_session(
+            monday + timedelta(days=wd), week["phase"], paces, preset, quali_km, intensity
+        ))
     for wd in easy_days:
         out.append({
             "date": monday + timedelta(days=wd), "weekday": wd, "workout_type": "easy",
@@ -315,22 +363,48 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
     return out
 
 
-def _quality_session(date, phase, paces, preset, quali_km):
+def _quality_session(date, phase, paces, preset, quali_km, intensity=None):
     wd = (date.weekday())
+    intensity = intensity or _DEFAULT_INTENSITY
+    tiros_pace = _pace_range_str(paces, intensity["pace_kind"])
+    pace_txt = f" a ~{tiros_pace}" if tiros_pace else ""
+
     if phase == "Base":
         # Rodagem fácil + 6 tiros curtos de 100 m no fim (contam no alvo: +0,6 km).
         strides_km = 0.6
         total_km = quali_km + strides_km
+        zone = intensity["strides_zone"]
         return {
             "date": date, "weekday": wd, "workout_type": "strides",
             "title": f"Rodagem + tiros — {_km_txt(total_km)} km",
             "description": (
                 f"{_km_txt(quali_km)} km soltos em {Z2} + 6×100 m progressivos no fim "
-                f"em {Z5} (acelere ao longo de cada tiro; caminhe para recuperar)."
+                f"em {zone}{pace_txt} ({intensity['strides_note']})."
             ),
             "target_distance_m": round(total_km * 1000), **_pace_kw(paces, "easy"),
-            "structure": [{"reps": 6, "distance_m": 100, "note": "progressivo", "recovery": "caminhada"}],
+            "structure": [{
+                "reps": 6, "distance_m": 100, "note": "progressivo", "recovery": "caminhada",
+                "target_pace_low_s": paces[intensity["pace_kind"]][0],
+                "target_pace_high_s": paces[intensity["pace_kind"]][1],
+            }],
         }
+
+    if phase == "Construção" and not intensity["hard"]:
+        # Blindagem/iniciante: troca o intervalado FORTE por ritmo controlado (sem Z5).
+        work_km = max(quali_km, 3.0)
+        total_km = work_km + 2  # aquecimento 1 km + controlado + 1 km solto
+        return {
+            "date": date, "weekday": wd, "workout_type": "tempo",
+            "title": f"Ritmo controlado — {_km_txt(total_km)} km",
+            "description": (
+                f"Aquecimento 1 km em {Z2} + {_km_txt(work_km)} km em ritmo controlado "
+                f"em {Z3}{pace_txt} (forte porém confortável; ainda fala frases curtas) "
+                f"+ 1 km solto. Total {_km_txt(total_km)} km."
+            ),
+            "target_distance_m": round(total_km * 1000), **_pace_kw(paces, "tempo"),
+            "structure": [],
+        }
+
     if phase == "Construção":
         iv = preset["interval"]
         work_km = iv["reps"] * iv["dist_m"] / 1000.0
@@ -339,21 +413,26 @@ def _quality_session(date, phase, paces, preset, quali_km):
             "date": date, "weekday": wd, "workout_type": "interval",
             "title": f"Intervalado {iv['reps']}×{iv['dist_m']} m",
             "description": (
-                f"Aquecimento 2 km em {Z2} + {iv['reps']}×{iv['dist_m']} m forte em {Z5} "
-                f"({iv['rec']}) + 1 km solto. Volume total ≈ {_km_txt(total_km)} km."
+                f"Aquecimento 2 km em {Z2} + {iv['reps']}×{iv['dist_m']} m forte em "
+                f"{intensity['strides_zone']}{pace_txt} ({iv['rec']}) + 1 km solto. "
+                f"Volume total ≈ {_km_txt(total_km)} km."
             ),
             "target_distance_m": round(total_km * 1000), **_pace_kw(paces, "interval"),
             "structure": [{"reps": iv["reps"], "distance_m": iv["dist_m"], "recovery": iv["rec"]}],
         }
-    # Pico (e demais): ritmo/limiar
+
+    # Pico (e demais): ritmo/limiar — Z4 (forte) ou Z3 (conservador/iniciante).
     tempo_km = preset["tempo_km"]
     total_km = tempo_km + 3  # aquecimento 2 km + ritmo + 1 km solto
+    tempo_zone = Z4 if intensity["hard"] else Z3
+    tempo_pace = _pace_range_str(paces, "tempo")
+    tempo_pace_txt = f" a ~{tempo_pace}" if tempo_pace else ""
     return {
         "date": date, "weekday": wd, "workout_type": "tempo",
         "title": f"Ritmo no limiar — {_km_txt(total_km)} km",
         "description": (
-            f"Aquecimento 2 km em {Z2} + {_km_txt(tempo_km)} km contínuos no limiar em "
-            f"{Z4} + 1 km solto em {Z2}. Total {_km_txt(total_km)} km."
+            f"Aquecimento 2 km em {Z2} + {_km_txt(tempo_km)} km contínuos em "
+            f"{tempo_zone}{tempo_pace_txt} + 1 km solto em {Z2}. Total {_km_txt(total_km)} km."
         ),
         "target_distance_m": round(total_km * 1000), **_pace_kw(paces, "tempo"),
         "structure": [],
@@ -474,13 +553,16 @@ def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None,
     if conservative:
         peak = round(max(peak * 0.85, base * 1.05), 1)
 
+    # Intensidade calibrada pelo nível real + blindagem (iniciante/conservador ≠ Z5).
+    intensity = _intensity_policy(profile, conservative)
+
     weeks = _weekly_volumes(base, peak, n, taper_weeks)
     workouts = []
     for i, week in enumerate(weeks):
         monday = first_monday + timedelta(weeks=i)
         day_workouts = build_week(
             monday, week, paces, preset, goal_distance_m, race_date=goal_race_date,
-            schedule=schedule, long_cap_km=long_cap_km,
+            schedule=schedule, long_cap_km=long_cap_km, intensity=intensity,
         )
         # Na semana atual, descarta os dias que já passaram — o plano começa no
         # PRÓXIMO dia disponível (ex.: criado no sábado, domingo já é treino).

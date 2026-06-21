@@ -1,5 +1,7 @@
 """Testes das metricas de treinador (logica central do ZayaRun)."""
+import os
 from datetime import timedelta
+from unittest import mock
 
 from django.test import TestCase
 from django.utils import timezone
@@ -328,6 +330,25 @@ class PlanGeneratorTests(TestCase):
             haystack = f"{w['title']} {w['description']}"
             self.assertIn(km_txt, haystack, msg=f"alvo {km_txt} ausente em: {haystack!r}")
 
+    def test_strides_show_pace_and_zone_for_trained(self):
+        """Atleta treinado: tiros em Z5 com pace-alvo explícito (coach cognitivo)."""
+        from runner.models import Anamnese
+        from runner.services import plans
+
+        user = User.objects.create_user("trained", password="x")
+        an = Anamnese.objects.create(
+            athlete=user, sessions_per_week=4,
+            available_days=[1, 2, 4, 6], preferred_long_day=6,
+        )
+        race = timezone.localdate() + timedelta(days=7 * 12 + 1)
+        spec = plans.generate_plan(self._activities(), 10_000, race, anamnese=an)
+        strides = [w for w in spec["workouts"] if w["workout_type"] == "strides"]
+        self.assertTrue(strides)
+        s = strides[0]
+        self.assertIn("Z5", s["description"])          # zona forte liberada
+        self.assertIn("~", s["description"])            # pace-alvo dos tiros ("~m:ss/km")
+        self.assertTrue(s["structure"][0].get("target_pace_low_s"))
+
     def test_volumes_positive_and_taper(self):
         from runner.services import plans
 
@@ -559,6 +580,19 @@ class ViewSmokeTests(TestCase):
         self.client.post(reverse("delete_plan", args=[plan.id]))
         self.assertFalse(TrainingPlan.objects.filter(pk=plan.id).exists())
 
+    def test_complete_workout_toggle(self):
+        """Concluir (1 toque) marca realizado; repetir reabre para planejado."""
+        w = PlannedWorkout.objects.create(
+            athlete=self.user, date=timezone.localdate(), workout_type="easy",
+            status=PlannedWorkout.STATUS_PLANNED,
+        )
+        self.client.post(reverse("complete_workout", args=[w.id]))
+        w.refresh_from_db()
+        self.assertEqual(w.status, PlannedWorkout.STATUS_COMPLETED)
+        self.client.post(reverse("complete_workout", args=[w.id]))
+        w.refresh_from_db()
+        self.assertEqual(w.status, PlannedWorkout.STATUS_PLANNED)
+
     def test_cannot_manage_others_workout(self):
         other = User.objects.create_user("intruso", password="x")
         w = PlannedWorkout.objects.create(
@@ -758,3 +792,47 @@ class AnamneseTests(TestCase):
         spec = plans.generate_plan([], 21_097, race, anamnese=an)
         self.assertTrue(spec["meta"]["conservative"])
         self.assertTrue(any("dor" in w.lower() for w in spec["meta"]["safety_warnings"]))
+
+    def test_conservative_plan_avoids_z5(self):
+        """Blindagem: dor/lesão (conservador) não prescreve trabalho forte (Z5)."""
+        from runner.models import Anamnese
+        from runner.services import plans
+
+        an = Anamnese.objects.create(
+            athlete=self.user, sessions_per_week=4,
+            available_days=[1, 2, 4, 6], preferred_long_day=6,
+            has_pain_now=True, pain_where="joelho",
+        )
+        race = timezone.localdate() + timedelta(days=7 * 12)
+        spec = plans.generate_plan([], 10_000, race, anamnese=an)
+        self.assertTrue(spec["meta"]["conservative"])
+        blob = " ".join(w["description"] for w in spec["workouts"])
+        self.assertNotIn("Z5", blob)            # iniciante/conservador não recebe Z5
+        self.assertNotIn("Intervalado", " ".join(w["title"] for w in spec["workouts"]))
+
+
+class AIProviderTests(TestCase):
+    """Resolução de provedor de IA (gratuito Gemini > Claude > regras)."""
+
+    def test_no_keys_falls_back_to_rules(self):
+        from runner.services import ai
+
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "", "ANTHROPIC_API_KEY": ""}), \
+                self.settings(AI_PROVIDER="auto"):
+            self.assertIsNone(ai.provider())
+            self.assertFalse(ai.is_enabled())
+
+    def test_gemini_key_enables_free_provider(self):
+        from runner.services import ai
+
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "k", "ANTHROPIC_API_KEY": ""}), \
+                self.settings(AI_PROVIDER="auto"):
+            self.assertEqual(ai.provider(), "gemini")
+            self.assertTrue(ai.is_enabled())
+
+    def test_rules_setting_disables_even_with_key(self):
+        from runner.services import ai
+
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "k"}), \
+                self.settings(AI_PROVIDER="rules"):
+            self.assertIsNone(ai.provider())

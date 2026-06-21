@@ -39,8 +39,18 @@
 </div>
 <p class="card-sub" style="margin:0 4px 6px">
   {{ weeks|length }} semanas · gerado por {{ plan.get_generated_by_display|default:plan.generated_by }} ·
-  {{ done_total }}/{{ count_total }} treinos realizados. Toque em ✎ para editar ou 🗑 para remover um treino.
+  {{ done_total }}/{{ count_total }} treinos realizados. Toque em <b>✓</b> para concluir, ✎ para editar ou 🗑 para remover.
 </p>
+
+<!-- Sua evolução: planejado × realizado por semana + aderência -->
+{% if weeks %}
+<div class="card">
+  <div class="card-head"><h3>📈 Sua evolução</h3>
+    <span class="muted small">{{ adherence_pct|default:0 }}% concluído</span></div>
+  <canvas id="planChart" height="130"></canvas>
+  <p class="card-sub" style="margin:8px 4px 0">Barras = km planejados (claro) × concluídos (cor) por semana · linha = aderência acumulada. Conclua treinos no <b>✓</b> para ver a curva subir.</p>
+</div>
+{% endif %}
 
 {% if plan.notes %}
 <div class="card note-clinic">
@@ -92,6 +102,14 @@
             {% if w.adherence %}<span class="pill pill-{{ w.adherence.zone }} wo-adh">{{ w.adherence.status }} · {{ w.adherence.score }}%</span>{% endif %}
           </div>
           <div class="wo-actions">
+            <form action="{% url 'complete_workout' w.id %}" method="post" class="inline">
+              {% csrf_token %}
+              {% if w.status == 'completed' %}
+                <button class="icon-act icon-done" type="submit" title="Reabrir treino">↺</button>
+              {% else %}
+                <button class="icon-act icon-ok" type="submit" title="Marcar como concluído">✓</button>
+              {% endif %}
+            </form>
             <a class="icon-act" href="{% url 'edit_workout' w.id %}" title="Editar">✎</a>
             <form action="{% url 'delete_workout' w.id %}" method="post" class="inline"
                   onsubmit="return confirm('Remover este treino?');">
@@ -131,4 +149,55 @@
     </form>
   </div>
 </details>
+{% endblock %}
+
+{% block scripts %}
+{% if weeks %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const BRAND = '#FF6A33', BLUE = '#5B8DEF', MINT = '#36D399';
+  const grid = 'rgba(148,163,184,.10)';
+  Chart.defaults.color = '#93A1B8';
+  Chart.defaults.font.family = "Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif";
+  Chart.defaults.font.size = 12;
+
+  const C = {{ chart_json|safe }};
+  const el = document.getElementById('planChart');
+  if (el && C.labels.length) {
+    new Chart(el, {
+      data: {
+        labels: C.labels,
+        datasets: [
+          { type:'bar', label:'Planejado (km)', data:C.planned, order:3,
+            backgroundColor:'rgba(91,141,239,.25)', borderRadius:6, maxBarThickness:30 },
+          { type:'bar', label:'Concluído (km)', data:C.done, order:2,
+            backgroundColor:BRAND, borderRadius:6, maxBarThickness:30 },
+          { type:'line', label:'Aderência (%)', data:C.adherence, order:1, yAxisID:'y1',
+            borderColor:MINT, borderWidth:2.5, tension:.35, pointRadius:0, pointHoverRadius:5,
+            pointBackgroundColor:MINT, fill:false },
+        ],
+      },
+      options: {
+        maintainAspectRatio:true,
+        interaction:{ mode:'index', intersect:false },
+        plugins:{
+          legend:{ display:true, labels:{ usePointStyle:true, boxWidth:8, padding:14 } },
+          tooltip:{ backgroundColor:'#1A2336', borderColor:'rgba(148,163,184,.2)', borderWidth:1,
+            padding:10, displayColors:true,
+            callbacks:{ label:(c)=> c.dataset.yAxisID==='y1'
+              ? ' '+c.dataset.label+': '+c.parsed.y+'%'
+              : ' '+c.dataset.label+': '+c.parsed.y+' km' } },
+        },
+        scales:{
+          x:{ stacked:false, grid:{display:false}, border:{display:false} },
+          y:{ beginAtZero:true, grid:{color:grid}, border:{display:false},
+            title:{ display:true, text:'km' } },
+          y1:{ beginAtZero:true, max:100, position:'right', grid:{display:false},
+            border:{display:false}, ticks:{ callback:(v)=>v+'%' } },
+        },
+      },
+    });
+  }
+</script>
+{% endif %}
 {% endblock %}

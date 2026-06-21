@@ -354,6 +354,10 @@ textarea{resize:vertical;min-height:70px}
   background:var(--surface);color:var(--muted);cursor:pointer;font-size:14px;font:inherit;transition:.15s}
 .icon-act:hover{border-color:var(--brand);color:var(--text)}
 .icon-danger:hover{border-color:var(--bad);color:var(--bad)}
+.icon-ok{color:var(--good)}
+.icon-ok:hover{border-color:var(--good);color:var(--good)}
+.icon-done{border-color:var(--good);color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}
+.icon-done:hover{border-color:var(--good);color:var(--text)}
 .add-details{margin:14px 0}
 .add-details > summary{cursor:pointer;list-style:none;width:fit-content}
 .add-details > summary::-webkit-details-marker{display:none}

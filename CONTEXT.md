@@ -45,7 +45,7 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Compliance Strava:** ao desconectar, purga atividades + perfil (exigência dos termos).
 - **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
 - **Deploy:** no ar no **Railway** (Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn; `runtime.txt` em 3.12.10 (fix mise). `seed_demo` popula treinador/atleta demo.
-- **Testes:** 64 passando (`python manage.py test`).
+- **Testes:** 70 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
@@ -116,7 +116,23 @@ python manage.py runserver
 3. **Zonas + linguagem (mesmo report).** ✅ Descrições falam **Z1–Z5** (linguagem universal de intensidade) e
    "educativos" virou **"tiros progressivos"**. Legenda Z1–Z5 (colapsável) em `plan_detail.html`; constantes/legenda
    em `plans.py` (`ZONES_LEGEND`, exposta em `meta.zones_legend`).
-   Testes: **64 passando** (+2: início no presente, km coerente).
+
+### ✨ NOVO — engajamento + coach cognitivo + IA grátis (2026-06-20)
+4. **Concluir treino (1 toque).** Botão **✓** em cada treino do `plan_detail` (toggle concluir/reabrir via
+   `complete_workout`, rota `treino/<id>/concluir/`). Reforça vínculo e sensação de progresso (status COMPLETED).
+5. **Gráfico de evolução** no `plan_detail`: barras planejado × concluído (km) por semana + linha de **aderência
+   acumulada** (Chart.js). Dados em `views_coach._plan_chart` (via `chart_json`). Conclui treino → curva sobe.
+6. **Pace dos tiros + intensidade calibrada (coach cognitivo).** Os tiros agora mostram o **pace-alvo** (vindo do
+   limiar real) e a **zona-teto é calibrada por nível + blindagem**: iniciante OU conservador (dor/lesão/ACWR
+   alto/pouco histórico) **não recebe Z5** — tiros viram progressivos Z3 e o intervalado forte vira "Ritmo
+   controlado". `plans._intensity_policy`, threaded por `build_week`/`_quality_session`; `auto_prescribe` também
+   calibra por ACWR. Estrutura dos tiros carrega `target_pace_low_s/high_s`.
+7. **Copiloto só-corrida + IA GRATUITA (Gemini).** `services/ai.py` agora suporta **Gemini** (Google AI Studio,
+   grátis, via REST) além da Claude; `AI_PROVIDER=auto` prioriza a chave gratuita. `SYSTEM_COPILOT` endurecido para
+   **recusar temas fora de corrida** e não dar diagnóstico médico. Chaves no `.env.example` (`GEMINI_API_KEY`,
+   `AI_PROVIDER`, `GEMINI_MODEL`). Sem chave → fallback honesto por regras.
+   Testes: **70 passando** (+6: início no presente, km coerente, tiros com pace/Z5, conservador sem Z5,
+   resolução de provedor de IA, toggle de conclusão).
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
@@ -143,5 +159,6 @@ python manage.py runserver
 
 ## 10. Como retomar
 Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`.\.venv\Scripts\python.exe manage.py test`) para confirmar
-baseline (**64 OK**). Os 2 bugs prioritários (início no futuro + KM que não batem) e o ajuste de zonas/linguagem
-**já foram corrigidos** (topo da seção 8). Próximo passo: ver "Próximos passos" abaixo (host de produção / PWA / Play).
+baseline (**70 OK**). Os 2 bugs prioritários + zonas/linguagem e as 4 melhorias novas (concluir treino, gráfico de
+evolução, pace/zona calibrados, Copiloto só-corrida com Gemini grátis) **já foram entregues** (topo da seção 8).
+Próximo passo: ver "Próximos passos" abaixo (host de produção / PWA / Play). Para ligar a IA grátis: setar `GEMINI_API_KEY`.

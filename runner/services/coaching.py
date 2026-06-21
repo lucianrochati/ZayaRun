@@ -16,7 +16,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from runner.models import CoachAthlete, PlannedWorkout
-from runner.services import ai, insights, metrics, plans
+from runner.services import ai, fitness, insights, metrics, plans
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +55,15 @@ def auto_prescribe(athlete, week_start=None, created_by=None, use_ai=True):
     preset = plans.closest_preset(10_000)
     goal_pace, _ = plans.estimate_goal_pace(activities, 10_000)
     paces = plans.training_paces(goal_pace, preset)
+    # Intensidade calibrada pelo nível real + blindagem (ACWR alto → sem Z5).
+    profile = fitness.compute_profile(activities)
+    conservative = bool(acwr and acwr["zone"] in ("risco", "atencao"))
+    intensity = plans._intensity_policy(profile, conservative)
     week = {"week_no": 1, "phase": phase, "volume_km": volume,
             "cutback": False, "is_race_week": False}
-    day_workouts = plans.build_week(monday, week, paces, preset, 10_000, race_date=None)
+    day_workouts = plans.build_week(
+        monday, week, paces, preset, 10_000, race_date=None, intensity=intensity
+    )
 
     PlannedWorkout.objects.filter(
         athlete=athlete,
@@ -260,9 +266,10 @@ def answer_question(athlete, question):
         return ("Ainda não há treinos suficientes para eu analisar. Conecte a "
                 "Strava e sincronize algumas corridas primeiro.")
     if not ai.is_enabled():
-        return ("O copiloto com IA precisa da chave ANTHROPIC_API_KEY configurada "
-                "no ambiente. Enquanto isso, seu painel já traz pace, carga (ACWR) "
-                "e projeção de provas — boa parte das respostas está lá.")
+        return ("O copiloto com IA está desligado. Configure uma chave gratuita "
+                "GEMINI_API_KEY (Google AI Studio) — ou ANTHROPIC_API_KEY — no "
+                "ambiente. Enquanto isso, seu painel já traz pace, carga (ACWR) e "
+                "projeção de provas — boa parte das respostas está lá.")
     text = ai.complete(
         SYSTEM_COPILOT,
         f"Pergunta do atleta: {question}\n\nDados do atleta (JSON):\n"
@@ -273,8 +280,14 @@ def answer_question(athlete, question):
 
 
 SYSTEM_COPILOT = (
-    "Você é o copiloto de treino do ZayaRun: um treinador de corrida que responde "
-    "perguntas do atleta com base SOMENTE nos dados fornecidos (JSON). Responda em "
-    "PT-BR, direto, no máximo 5 frases. Se os dados não permitirem responder, diga "
-    "isso com honestidade. Nunca invente números que não estejam nos dados."
+    "Você é o copiloto do ZayaRun, um treinador de corrida. Fale EXCLUSIVAMENTE "
+    "sobre corrida e o treino deste atleta: pace, volume, carga (ACWR), zonas de "
+    "intensidade, plano de prova, longão, tiros, recuperação, prevenção de lesão e "
+    "hábitos que afetam a corrida (sono, hidratação, alimentação no contexto do "
+    "treino). Se a pergunta NÃO for sobre corrida/treino, RECUSE com gentileza em 1 "
+    "frase e reconduza ao tema (ex.: 'Sou seu copiloto de corrida — posso te ajudar "
+    "com pace, carga, plano ou a próxima prova.'). Responda SOMENTE com base nos "
+    "dados fornecidos (JSON), em PT-BR, direto, no máximo 5 frases, sem markdown. "
+    "Nunca invente números que não estejam nos dados. Não dê diagnóstico médico: em "
+    "caso de dor ou lesão, oriente procurar um profissional de saúde."
 )

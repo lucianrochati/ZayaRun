@@ -3,6 +3,7 @@ Views do lado-treinador e dos recursos novos do atleta:
 roster + triagem do coach, prescrição (manual/IA), plano de prova,
 feedback (PSE), check-in diário e copiloto conversacional.
 """
+import json
 import logging
 from datetime import datetime, timedelta
 
@@ -433,18 +434,34 @@ def _plan_weeks(plan):
         ws = by_monday[monday]
         sunday = monday + timedelta(days=6)
         active = [w for w in ws if w.workout_type != "rest"]
+        done_ws = [w for w in ws if w.status == PlannedWorkout.STATUS_COMPLETED]
         weeks.append({
             "index": index,
             "monday": monday,
             "sunday": sunday,
             "workouts": ws,
             "total_km": round(sum((w.target_distance_m or 0) for w in ws) / 1000.0, 1),
-            "done": sum(1 for w in ws if w.status == PlannedWorkout.STATUS_COMPLETED),
+            "done_km": round(sum((w.target_distance_m or 0) for w in done_ws) / 1000.0, 1),
+            "done": len(done_ws),
             "count": len(active),
             "is_current": monday <= today <= sunday,
             "is_past": sunday < today,
         })
     return weeks
+
+
+def _plan_chart(weeks):
+    """Série semanal planejado × realizado (km) + aderência acumulada (%)."""
+    labels, planned, done, adherence = [], [], [], []
+    cum_done = cum_count = 0
+    for w in weeks:
+        labels.append(f"S{w['index']}")
+        planned.append(w["total_km"])
+        done.append(w["done_km"])
+        cum_done += w["done"]
+        cum_count += w["count"]
+        adherence.append(round(cum_done / cum_count * 100) if cum_count else 0)
+    return {"labels": labels, "planned": planned, "done": done, "adherence": adherence}
 
 
 @login_required
@@ -464,6 +481,7 @@ def plan_detail(request, plan_id):
         "done_total": done_total,
         "count_total": count_total,
         "adherence_pct": round(done_total / count_total * 100) if count_total else None,
+        "chart_json": json.dumps(_plan_chart(weeks)),
         "today": timezone.localdate(),
     })
 
@@ -528,6 +546,24 @@ def delete_workout(request, planned_id):
     workout.delete()
     messages.info(request, "Treino removido.")
     return redirect(back)
+
+
+@login_required
+@require_POST
+def complete_workout(request, planned_id):
+    """Marca/desmarca um treino como concluído (1 toque) — reforça a evolução."""
+    workout = get_object_or_404(PlannedWorkout, pk=planned_id)
+    if not _can_manage(request.user, workout.athlete):
+        raise Http404("Treino não encontrado.")
+    if workout.status == PlannedWorkout.STATUS_COMPLETED:
+        # Reabre: volta a planejado (mantém o vínculo da Strava, se houver).
+        workout.status = PlannedWorkout.STATUS_PLANNED
+        messages.info(request, "Treino reaberto.")
+    else:
+        workout.status = PlannedWorkout.STATUS_COMPLETED
+        messages.success(request, "Treino concluído! 💪 Mais um passo na sua evolução.")
+    workout.save(update_fields=["status", "updated_at"])
+    return redirect(_back_to(request, workout))
 
 
 @login_required

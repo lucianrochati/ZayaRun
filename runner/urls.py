@@ -31,6 +31,7 @@ urlpatterns = [
     path("plano/<int:plan_id>/treino/novo/", views_coach.add_workout_to_plan, name="add_workout_to_plan"),
     path("treino/<int:planned_id>/editar/", views_coach.edit_workout, name="edit_workout"),
     path("treino/<int:planned_id>/excluir/", views_coach.delete_workout, name="delete_workout"),
+    path("treino/<int:planned_id>/concluir/", views_coach.complete_workout, name="complete_workout"),
     path("treino/<int:planned_id>/feedback/", views_coach.workout_feedback, name="workout_feedback"),
     path("checkin/", views_coach.daily_checkin, name="daily_checkin"),
     path("copiloto/", views_coach.copilot, name="copilot"),
