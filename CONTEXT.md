@@ -45,7 +45,7 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Compliance Strava:** ao desconectar, purga atividades + perfil (exigência dos termos).
 - **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
 - **Deploy:** no ar no **Railway** (Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn; `runtime.txt` em 3.12.10 (fix mise). `seed_demo` popula treinador/atleta demo.
-- **Testes:** 70 passando (`python manage.py test`).
+- **Testes:** 72 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
@@ -133,11 +133,17 @@ python manage.py runserver
    `AI_PROVIDER`, `GEMINI_MODEL`). Sem chave → fallback honesto por regras.
    Testes: **70 passando** (+6: início no presente, km coerente, tiros com pace/Z5, conservador sem Z5,
    resolução de provedor de IA, toggle de conclusão).
+8. **PWA instalável + "instale o app".** ✅ **Service worker** em `/sw.js` (view `service_worker`, escopo raiz via
+   header `Service-Worker-Allowed`) — instalável + offline básico (HTML rede-primeiro c/ fallback; estáticos
+   cache-primeiro; ignora POST/OAuth/sync). **Banner de instalação** (`_pwa_install.html`, incluído no `base.html`):
+   Android/Chrome usa `beforeinstallprompt`; iOS mostra "Compartilhar → Adicionar à Tela de Início"; some se já
+   instalado. ⚠️ **Segredo:** chave da IA só no `.env`/Config Vars — **nunca** no `.env.example` (versionado/público).
+   Testes: **72 passando** (+2 PWA).
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
 2. **Publicação na Google Play (TWA)** — app é web, entra como PWA empacotada:
-   - falta **service worker** (offline) no PWA;
+   - ~~falta **service worker** (offline) no PWA~~ ✅ feito (`/sw.js`);
    - rota `/.well-known/assetlinks.json` (verificação de posse);
    - conta Play Console (US$ 25), empacotar no **PWABuilder**, política de privacidade.
 3. ~~**Lado da assessoria**~~ ✅ **FEITO** (H1→H3): roster+triagem, prescrição manual/IA, planejado×realizado,
@@ -159,6 +165,7 @@ python manage.py runserver
 
 ## 10. Como retomar
 Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`.\.venv\Scripts\python.exe manage.py test`) para confirmar
-baseline (**70 OK**). Os 2 bugs prioritários + zonas/linguagem e as 4 melhorias novas (concluir treino, gráfico de
-evolução, pace/zona calibrados, Copiloto só-corrida com Gemini grátis) **já foram entregues** (topo da seção 8).
-Próximo passo: ver "Próximos passos" abaixo (host de produção / PWA / Play). Para ligar a IA grátis: setar `GEMINI_API_KEY`.
+baseline (**72 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
+evolução, pace/zona calibrados, Copiloto só-corrida com Gemini grátis, PWA instalável) **já foram entregues** (seção 8).
+Próximo passo: ver "Próximos passos" abaixo (host de produção / Play). Para ligar a IA grátis: setar `GEMINI_API_KEY`
+no `.env`/Railway (nunca no `.env.example`).
