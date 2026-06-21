@@ -45,7 +45,7 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Compliance Strava:** ao desconectar, purga atividades + perfil (exigência dos termos).
 - **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
 - **Deploy:** no ar no **Railway** (Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn; `runtime.txt` em 3.12.10 (fix mise). `seed_demo` popula treinador/atleta demo.
-- **Testes:** 72 passando (`python manage.py test`).
+- **Testes:** 75 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
@@ -127,18 +127,19 @@ python manage.py runserver
    alto/pouco histórico) **não recebe Z5** — tiros viram progressivos Z3 e o intervalado forte vira "Ritmo
    controlado". `plans._intensity_policy`, threaded por `build_week`/`_quality_session`; `auto_prescribe` também
    calibra por ACWR. Estrutura dos tiros carrega `target_pace_low_s/high_s`.
-7. **Copiloto só-corrida + IA GRATUITA (Gemini).** `services/ai.py` agora suporta **Gemini** (Google AI Studio,
-   grátis, via REST) além da Claude; `AI_PROVIDER=auto` prioriza a chave gratuita. `SYSTEM_COPILOT` endurecido para
-   **recusar temas fora de corrida** e não dar diagnóstico médico. Chaves no `.env.example` (`GEMINI_API_KEY`,
-   `AI_PROVIDER`, `GEMINI_MODEL`). Sem chave → fallback honesto por regras.
-   Testes: **70 passando** (+6: início no presente, km coerente, tiros com pace/Z5, conservador sem Z5,
-   resolução de provedor de IA, toggle de conclusão).
+7. **Copiloto só-corrida + IA GRATUITA (Groq/Gemini/Claude).** `services/ai.py` suporta **Groq** (Llama 3.3 70B,
+   GRÁTIS e **sem cartão**), **Gemini** e **Claude**; `provider()` em `AI_PROVIDER=auto` prioriza as gratuitas
+   **Groq → Gemini → Claude**. `SYSTEM_COPILOT` endurecido para **recusar temas fora de corrida** e não dar
+   diagnóstico médico. Chaves no `.env.example` (`GROQ_API_KEY`, `GEMINI_API_KEY`, `AI_PROVIDER`, `GROQ_MODEL`).
+   Sem chave → fallback honesto por regras. ⚠️ **Gemini free tier estoura cota de tokens (429)** com pouco uso →
+   por isso o **padrão recomendado é Groq**. **Diagnóstico:** `manage.py check_ai` e página **`/ai/diag`** (só admin)
+   mostram provider resolvido, chave mascarada e o **motivo exato** de uma falha (corpo do 429 etc.).
 8. **PWA instalável + "instale o app".** ✅ **Service worker** em `/sw.js` (view `service_worker`, escopo raiz via
    header `Service-Worker-Allowed`) — instalável + offline básico (HTML rede-primeiro c/ fallback; estáticos
    cache-primeiro; ignora POST/OAuth/sync). **Banner de instalação** (`_pwa_install.html`, incluído no `base.html`):
    Android/Chrome usa `beforeinstallprompt`; iOS mostra "Compartilhar → Adicionar à Tela de Início"; some se já
    instalado. ⚠️ **Segredo:** chave da IA só no `.env`/Config Vars — **nunca** no `.env.example` (versionado/público).
-   Testes: **72 passando** (+2 PWA).
+   Testes: **75 passando** (+2 PWA, + Groq/diagnóstico).
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
@@ -165,7 +166,7 @@ python manage.py runserver
 
 ## 10. Como retomar
 Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`.\.venv\Scripts\python.exe manage.py test`) para confirmar
-baseline (**72 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
-evolução, pace/zona calibrados, Copiloto só-corrida com Gemini grátis, PWA instalável) **já foram entregues** (seção 8).
-Próximo passo: ver "Próximos passos" abaixo (host de produção / Play). Para ligar a IA grátis: setar `GEMINI_API_KEY`
-no `.env`/Railway (nunca no `.env.example`).
+baseline (**75 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
+evolução, pace/zona calibrados, Copiloto só-corrida, PWA instalável) **já foram entregues** (seção 8).
+Próximo passo: ver "Próximos passos" abaixo (host de produção / Play). Para ligar a IA grátis: setar `GROQ_API_KEY`
+(console.groq.com, sem cartão) no `.env`/Railway — `AI_PROVIDER=auto` já prioriza o Groq. (`/ai/diag` diagnostica.)
