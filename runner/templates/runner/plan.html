@@ -4,6 +4,9 @@
 
 <div class="page-head"><div><p class="eyebrow">Plano</p><h1>Meu plano de prova</h1></div></div>
 
+<!-- Perfil de aptidão (base do plano) -->
+{% include "runner/_fitness_profile.html" with fitness=fitness %}
+
 <!-- Prontidão de hoje (heurística transparente) -->
 {% if readiness %}
 <div class="card">

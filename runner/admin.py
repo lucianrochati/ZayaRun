@@ -4,6 +4,7 @@ from runner.models import (
     Activity,
     CoachAthlete,
     DailyCheckin,
+    FitnessProfile,
     PlannedWorkout,
     Profile,
     StravaToken,
@@ -94,3 +95,18 @@ class DailyCheckinAdmin(admin.ModelAdmin):
     list_filter = ("source",)
     search_fields = ("athlete__username",)
     date_hierarchy = "date"
+
+
+@admin.register(FitnessProfile)
+class FitnessProfileAdmin(admin.ModelAdmin):
+    list_display = (
+        "athlete",
+        "experience_level",
+        "weekly_volume_km",
+        "longest_run_km",
+        "runs_per_week",
+        "confidence",
+        "computed_at",
+    )
+    list_filter = ("experience_level", "confidence", "volume_trend")
+    search_fields = ("athlete__username",)

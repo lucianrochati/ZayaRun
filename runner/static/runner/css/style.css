@@ -343,6 +343,12 @@ textarea{resize:vertical;min-height:70px}
 .note-soft{font-size:13px;color:var(--warn);background:rgba(251,191,36,.08);
   border:1px solid rgba(251,191,36,.25);border-radius:var(--r-sm);padding:10px 12px;margin-top:10px}
 
+/* ---------- Zonas de pace (perfil de aptidão) ---------- */
+.zones{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.zone{font-size:13px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--r-pill);padding:6px 12px}
+.zone b{color:var(--text);font-weight:700;margin-right:4px}
+
 /* ---------- Feedback / PSE ---------- */
 .feel-row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
 .feel-opt{flex:1;min-width:64px;text-align:center;padding:10px 6px;border-radius:var(--r-sm);

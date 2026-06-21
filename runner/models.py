@@ -460,3 +460,84 @@ class DailyCheckin(models.Model):
 
     def __str__(self):
         return f"Check-in {self.date:%d/%m} - {self.athlete.get_username()}"
+
+
+class FitnessProfile(models.Model):
+    """
+    Retrato de aptidao DERIVADO de todo o historico de corridas do atleta.
+    Atualizado a cada sync (services.fitness). E o que o gerador de plano
+    consulta para montar um treino baseado no que o atleta REALMENTE fez.
+    """
+
+    LEVEL_CHOICES = [
+        ("beginner", "Iniciante"),
+        ("intermediate", "Intermediário"),
+        ("advanced", "Avançado"),
+    ]
+    TREND_CHOICES = [
+        ("building", "Em evolução"),
+        ("stable", "Estável"),
+        ("detraining", "Destreino"),
+    ]
+    CONFIDENCE_CHOICES = [
+        ("low", "Baixa"),
+        ("medium", "Média"),
+        ("high", "Alta"),
+    ]
+
+    athlete = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="fitness_profile",
+    )
+    computed_at = models.DateTimeField(auto_now=True)
+
+    weeks_of_data = models.IntegerField(default=0)
+    activities_count = models.IntegerField(default=0)
+    weekly_volume_km = models.FloatField(default=0)        # mediana recente (robusta)
+    volume_trend = models.CharField(max_length=16, default="stable")
+    runs_per_week = models.IntegerField(default=0)
+    longest_run_km = models.FloatField(default=0)          # maior longão recente
+    peak_weekly_km = models.FloatField(default=0)          # pico histórico
+    # Zonas de pace (segundos/km) extraídas dos dados reais.
+    easy_pace_s = models.IntegerField(null=True, blank=True)
+    threshold_pace_s = models.IntegerField(null=True, blank=True)
+    recent_effort_pace_s = models.IntegerField(null=True, blank=True)
+    recent_effort_distance_m = models.FloatField(null=True, blank=True)
+    acwr = models.FloatField(null=True, blank=True)
+    acwr_zone = models.CharField(max_length=16, blank=True, default="")
+    consistency_pct = models.IntegerField(default=0)
+    experience_level = models.CharField(max_length=16, default="beginner")
+    confidence = models.CharField(max_length=8, default="low")
+
+    def __str__(self):
+        return f"Aptidão de {self.athlete.get_username()} ({self.experience_level})"
+
+    def _pace_str(self, secs):
+        from runner.services import metrics
+
+        return metrics.format_pace(secs) if secs else None
+
+    @property
+    def easy_pace_str(self):
+        return self._pace_str(self.easy_pace_s)
+
+    @property
+    def threshold_pace_str(self):
+        return self._pace_str(self.threshold_pace_s)
+
+    @property
+    def recent_effort_pace_str(self):
+        return self._pace_str(self.recent_effort_pace_s)
+
+    @property
+    def level_label(self):
+        return dict(self.LEVEL_CHOICES).get(self.experience_level, self.experience_level)
+
+    @property
+    def trend_label(self):
+        return dict(self.TREND_CHOICES).get(self.volume_trend, self.volume_trend)
+
+    @property
+    def confidence_label(self):
+        return dict(self.CONFIDENCE_CHOICES).get(self.confidence, self.confidence)

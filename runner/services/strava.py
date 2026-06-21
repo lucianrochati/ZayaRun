@@ -17,7 +17,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from runner.models import Activity, StravaToken
-from runner.services import matching, metrics
+from runner.services import fitness, matching, metrics
 
 logger = logging.getLogger(__name__)
 
@@ -176,15 +176,18 @@ def _get(token, path, params=None):
     return resp.json()
 
 
-def sync_activities(user, per_page=50, pages=2):
+def sync_activities(user, deep=False):
     """
-    Baixa as atividades mais recentes e salva/atualiza no banco.
+    Baixa atividades e salva/atualiza no banco. Retorna (criadas, atualizadas).
 
-    Retorna (criadas, atualizadas).
+    `deep=True` faz um backfill profundo (1a conexao) — ate ~12 paginas de 100,
+    respeitando o rate limit da Strava — para termos historico suficiente para
+    montar o plano. `deep=False` (padrao) sincroniza so as recentes, rapido.
     """
     token = StravaToken.objects.get(user=user)
+    per_page, max_pages = (100, 12) if deep else (50, 2)
     created = updated = 0
-    for page in range(1, pages + 1):
+    for page in range(1, max_pages + 1):
         batch = _get(
             token,
             "/athlete/activities",
@@ -198,6 +201,11 @@ def sync_activities(user, per_page=50, pages=2):
             updated += int(not was_created)
     # Casa o realizado com os treinos prescritos (planejado x realizado).
     matching.reconcile(user)
+    # Recalcula o perfil de aptidao (base do gerador de plano).
+    try:
+        fitness.update_profile(user)
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao atualizar o perfil de aptidao")
     return created, updated
 
 

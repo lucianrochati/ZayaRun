@@ -12,7 +12,9 @@ from runner.models import (
     Activity,
     CoachAthlete,
     DailyCheckin,
+    FitnessProfile,
     PlannedWorkout,
+    StravaToken,
     WorkoutFeedback,
 )
 from runner.services import insights, matching, metrics
@@ -278,8 +280,14 @@ class MatchingTests(TestCase):
 
 class PlanGeneratorTests(TestCase):
     def _activities(self):
-        # ~base de treino com melhor 10k a 5:00/km
-        return [make_run(10_000, 3_000, days_ago=d) for d in (2, 5, 9, 12, 16, 19, 23, 26)]
+        # Rodagens fáceis ~5:35–5:50, um 5k forte (~4:40) e um longão de 16 km.
+        runs = [
+            make_run(10_000, 10 * p, days_ago=3 * i + 2)
+            for i, p in enumerate((340, 345, 335, 350, 340, 345))
+        ]
+        runs.append(make_run(5_000, 1_400, days_ago=4))      # 5k forte ~4:40
+        runs.append(make_run(16_000, 16 * 360, days_ago=7))  # longão 16k ~6:00
+        return runs
 
     def test_plan_spans_to_race_day(self):
         from runner.services import plans
@@ -321,6 +329,18 @@ class PlanGeneratorTests(TestCase):
             PlannedWorkout.objects.filter(plan=plan).count(), len(spec["workouts"])
         )
         self.assertFalse(spec["meta"]["confident"])
+        self.assertFalse(spec["meta"]["from_history"])  # sem dados
+
+    def test_plan_is_driven_by_history(self):
+        from runner.services import plans
+
+        race_date = timezone.localdate() + timedelta(days=7 * 8)
+        spec = plans.generate_plan(self._activities(), 10_000, race_date)
+        self.assertTrue(spec["meta"]["from_history"])
+        self.assertLessEqual(spec["meta"]["runs_per_week"], 4)   # respeita preset 10k
+        self.assertGreaterEqual(spec["meta"]["runs_per_week"], 3)
+        # o longão não estoura muito além do maior real (16 km) — teto sensato
+        self.assertLessEqual(spec["meta"]["long_cap_km"], 22)
 
 
 class CoachingTests(TestCase):
@@ -459,6 +479,22 @@ class ViewSmokeTests(TestCase):
         # Renderiza o plano já com prontidão/check-in preenchidos.
         self.assertEqual(self.client.get(reverse("my_plan")).status_code, 200)
 
+    def test_disconnect_purges_strava_data(self):
+        StravaToken.objects.create(
+            user=self.user, athlete_id=1, access_token="a", refresh_token="r",
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+        Activity.objects.create(
+            user=self.user, source=Activity.SOURCE_STRAVA, external_id="z1",
+            sport_type="Run", start_date=timezone.now(),
+            distance_m=10_000, moving_time_s=3_000,
+        )
+        FitnessProfile.objects.create(athlete=self.user)
+        self.client.post(reverse("strava_disconnect"))
+        self.assertFalse(StravaToken.objects.filter(user=self.user).exists())
+        self.assertFalse(Activity.objects.filter(user=self.user).exists())
+        self.assertFalse(FitnessProfile.objects.filter(athlete=self.user).exists())
+
 
 @override_settings(STORAGES={
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -534,3 +570,52 @@ class WellnessTests(TestCase):
         self.assertIsNotNone(risk)
         self.assertEqual(risk["method"], "heuristic")
         self.assertGreaterEqual(risk["risk"], 0)
+
+
+class FitnessProfileTests(TestCase):
+    """Perfil de aptidão derivado do histórico (services.fitness)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("fp", password="x")
+
+    def _seed(self, specs):
+        for i, (dist_m, moving_s, ago) in enumerate(specs):
+            Activity.objects.create(
+                user=self.user, source=Activity.SOURCE_STRAVA, external_id=f"fp{i}",
+                sport_type="Run", start_date=timezone.now() - timedelta(days=ago),
+                distance_m=dist_m, moving_time_s=moving_s,
+            )
+
+    def test_none_without_runs(self):
+        from runner.services import fitness
+
+        self.assertIsNone(fitness.compute_profile([]))
+
+    def test_extracts_history_signals(self):
+        from runner.services import fitness
+
+        specs = []
+        for wk in range(12):
+            specs.append((10_000, 3_300, wk * 7 + 1))
+            specs.append((8_000, 2_640, wk * 7 + 3))
+            if wk % 2 == 0:
+                specs.append((18_000, 6_480, wk * 7 + 6))
+        specs.append((5_000, 1_320, 5))  # 5k forte (4:24)
+        self._seed(specs)
+        p = fitness.compute_profile(list(self.user.activities.all()))
+        self.assertIsNotNone(p)
+        self.assertGreaterEqual(p["longest_run_km"], 17)
+        self.assertGreaterEqual(p["runs_per_week"], 2)
+        self.assertIsNotNone(p["easy_pace_s"])
+        self.assertIsNotNone(p["threshold_pace_s"])
+        self.assertIn(p["experience_level"], {"beginner", "intermediate", "advanced"})
+        self.assertEqual(p["confidence"], "high")
+
+    def test_update_profile_persists(self):
+        from runner.services import fitness
+
+        self._seed([(10_000, 3_300, 2), (8_000, 2_640, 5), (12_000, 4_200, 9)])
+        prof = fitness.update_profile(self.user)
+        self.assertIsNotNone(prof)
+        self.assertTrue(FitnessProfile.objects.filter(athlete=self.user).exists())
+        self.assertGreater(prof.weekly_volume_km, 0)

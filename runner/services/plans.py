@@ -15,7 +15,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from runner.models import PlannedWorkout, TrainingPlan
-from runner.services import metrics
+from runner.services import fitness, metrics
 
 MAX_WEEKS = 20  # planos mais longos começam no meio do caminho
 
@@ -94,12 +94,35 @@ def estimate_goal_pace(activities, goal_distance_m, goal_time_s=None):
 
 
 def training_paces(goal_pace_s, preset):
-    """Faixas de pace por tipo de treino (segundos/km), a partir do pace-alvo."""
+    """Faixas de pace por tipo (s/km) a partir do pace-alvo (fallback sem histórico)."""
     paces = {}
     for kind, (lo_off, hi_off) in preset["offsets"].items():
         paces[kind] = (round(goal_pace_s + lo_off), round(goal_pace_s + hi_off))
     paces["race"] = (round(goal_pace_s), round(goal_pace_s))
     return paces
+
+
+def training_paces_from_profile(profile, goal_pace_s):
+    """
+    Faixas de pace ancoradas nos dados REAIS do atleta (zona fácil e limiar),
+    não em offsets genéricos. O ritmo de prova é a meta; o resto vem do que ele
+    realmente corre. Retorna None se não houver zona fácil estimada.
+    """
+    easy = profile.get("easy_pace_s")
+    if not easy:
+        return None
+    thr = profile.get("threshold_pace_s") or (easy - 25)
+    interval = thr - 15
+    raw = {
+        "recovery": (easy + 10, easy + 30),
+        "easy": (easy, easy + 15),
+        "long": (max(easy - 10, goal_pace_s), easy + 5),
+        "tempo": (thr - 4, thr + 10),
+        "interval": (interval - 12, interval),
+        "race": (goal_pace_s, goal_pace_s),
+    }
+    # Garante lo<=hi e valores plausíveis.
+    return {k: (min(a, b), max(a, b)) for k, (a, b) in raw.items()}
 
 
 # --------------------------------------------------------------------------
@@ -149,13 +172,16 @@ def _pace_kw(paces, kind):
 
 
 def _easy_days(runs_per_week):
-    # (dias de easy, dia do quali=qua=2, dia do longão=dom=6)
+    # dias de rodagem fácil; quali=qua(2) e longão=dom(6) são fixos.
     if runs_per_week >= 5:
         return [1, 3, 4]  # ter, qui, sex
-    return [1, 4]  # ter, sex
+    if runs_per_week == 4:
+        return [1, 4]      # ter, sex
+    return [3]             # só qui (total 3 treinos/semana)
 
 
-def build_week(monday, week, paces, preset, goal_distance_m, race_date=None):
+def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
+               runs_per_week=None, long_cap_km=None):
     """Distribui o volume da semana em treinos diários (lista de dicts)."""
     vol = week["volume_km"]
     out = []
@@ -180,8 +206,8 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None):
                 })
         return out
 
-    runs = preset["runs"]
-    long_km = round(min(vol * 0.35, preset["long_cap_km"]), 1)
+    runs = runs_per_week or preset["runs"]
+    long_km = round(min(vol * 0.35, long_cap_km or preset["long_cap_km"]), 1)
     quali_km = round(vol * 0.22, 1)
     easy_days = _easy_days(runs)
     easy_total = max(vol - long_km - quali_km, 0)
@@ -262,17 +288,40 @@ def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None, 
     first_monday = race_monday - timedelta(weeks=n - 1)
 
     taper_weeks = min(preset["taper_weeks"], max(1, n - 1))
-    base = max(current_base_km(activities), 12.0)  # piso só para não degenerar
-    peak = max(min(preset["peak_cap_km"], base * 1.5), base * 1.1)
+
+    # --- Parâmetros vindos do HISTÓRICO real do atleta (perfil de aptidão) ---
+    profile = fitness.compute_profile(activities)
+    if profile:
+        base = max(profile["weekly_volume_km"], 6.0)
+        peak = max(
+            min(preset["peak_cap_km"], max(profile["peak_weekly_km"], base * 1.4)),
+            base * 1.1,
+        )
+        runs_per_week = min(max(profile["runs_per_week"], 3), preset["runs"])
+        # O longão não salta além do que ele já fez: até ~+6 km ou o teto da prova.
+        long_cap_km = min(preset["long_cap_km"], max(profile["longest_run_km"] + 6, base * 0.4))
+        confidence = profile["confidence"]
+    else:
+        base = 12.0
+        peak = max(min(preset["peak_cap_km"], base * 1.5), base * 1.1)
+        runs_per_week = preset["runs"]
+        long_cap_km = preset["long_cap_km"]
+        confidence = "low"
+
     goal_pace, confident = estimate_goal_pace(activities, goal_distance_m, goal_time_s)
-    paces = training_paces(goal_pace, preset)
+    # Paces ancorados nas zonas REAIS do atleta; cai p/ offsets da meta sem histórico.
+    paces = (
+        (training_paces_from_profile(profile, round(goal_pace)) if profile else None)
+        or training_paces(goal_pace, preset)
+    )
 
     weeks = _weekly_volumes(base, peak, n, taper_weeks)
     workouts = []
     for i, week in enumerate(weeks):
         monday = first_monday + timedelta(weeks=i)
         day_workouts = build_week(
-            monday, week, paces, preset, goal_distance_m, race_date=goal_race_date
+            monday, week, paces, preset, goal_distance_m, race_date=goal_race_date,
+            runs_per_week=runs_per_week, long_cap_km=long_cap_km,
         )
         for w in day_workouts:
             w["week_no"] = week["week_no"]
@@ -287,10 +336,15 @@ def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None, 
             "weeks": n,
             "base_km": round(base, 1),
             "peak_km": round(peak, 1),
+            "runs_per_week": runs_per_week,
+            "long_cap_km": round(long_cap_km, 1),
             "goal_pace_s": round(goal_pace),
             "goal_pace_str": metrics.format_pace(goal_pace),
             "goal_time_s": goal_time_s,
             "confident": confident,
+            "confidence": confidence,
+            "from_history": bool(profile),
+            "profile": profile,
             "start_date": first_monday,
         },
         "weeks": weeks,

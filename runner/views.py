@@ -13,7 +13,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from runner import views_coach
-from runner.models import Activity, CoachAthlete, PlannedWorkout, StravaToken, WorkoutFeedback
+from runner.models import (
+    Activity,
+    CoachAthlete,
+    FitnessProfile,
+    PlannedWorkout,
+    StravaToken,
+    WorkoutFeedback,
+)
 from runner.services import insights, metrics, strava
 
 logger = logging.getLogger(__name__)
@@ -149,7 +156,8 @@ def strava_callback(request):
 
     try:
         strava.save_token(user, data)
-        created, updated = strava.sync_activities(user)
+        # Backfill profundo na conexão: precisamos do histórico para o plano.
+        created, updated = strava.sync_activities(user, deep=True)
         messages.success(
             request, f"Strava conectada! {created} treinos novos, {updated} atualizados."
         )
@@ -181,8 +189,11 @@ def strava_sync(request):
 @login_required
 @require_POST
 def strava_disconnect(request):
+    # Termos da Strava: ao desconectar, removemos os dados sincronizados.
     StravaToken.objects.filter(user=request.user).delete()
-    messages.info(request, "Conta Strava desconectada.")
+    Activity.objects.filter(user=request.user, source=Activity.SOURCE_STRAVA).delete()
+    FitnessProfile.objects.filter(athlete=request.user).delete()
+    messages.info(request, "Conta Strava desconectada e seus dados da Strava removidos.")
     return redirect("dashboard")
 
 

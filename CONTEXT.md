@@ -35,11 +35,15 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Painel do coach (H1):** roster com **triagem por IA/regras** (semáforo de risco, abandono, conquista) e resumo do dia.
 - **Prescrição (H1+H2):** treino manual, **semana gerada automaticamente** (regras + ajuste por ACWR, nota opcional da Claude) e **planejado × realizado** com matching automático no sync da Strava + score de aderência.
 - **Feedback do atleta (H1):** PSE (1–10) + sensação, e **check-in diário** (sono/dor/estresse) que alimentam o contexto da IA.
-- **Plano de prova adaptativo (H3):** macrociclo periodizado (base→construção→pico→polimento) com paces-alvo; recriar = re-planeja semanas futuras pela forma atual.
+- **Perfil de aptidão (NOVO):** `FitnessProfile` derivado de TODO o histórico (services/fitness.py) — volume típico, tendência, frequência, maior longão, pico, zonas de pace reais (fácil/limiar/esforço), ACWR, consistência, nível e confiança. Recalculado a cada sync.
+- **Plano de prova dirigido pelo histórico (H3):** macrociclo periodizado (base→construção→pico→polimento) cujos números (base, pico, frequência, teto do longão, paces) vêm do `FitnessProfile` real — não de offsets genéricos. Recriar = re-planeja pela forma atual. Backfill profundo na 1ª conexão.
 - **Copiloto conversacional (H3):** pergunta em linguagem natural respondida sobre os próprios dados (fallback honesto sem chave).
 - **Prontidão (H3):** índice heurístico **transparente** (carga+percepção+check-in); HRV/sono e ML de lesão deixados como ponto de extensão honesto (sem número falso) em `services/wellness.py` e `services/garmin.py`.
+- **Login com Strava:** botão "Entrar com a Strava" na tela de login cria/loga a conta pelo athlete_id (sem cadastro manual). ⚠️ limitado pela **cota de atletas conectados** da Strava (apps não aprovados ≈ só o dono) — pedir aumento na Strava p/ distribuir.
+- **Compliance Strava:** ao desconectar, purga atividades + perfil (exigência dos termos).
 - **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
-- **Testes:** 45 passando (`python manage.py test`).
+- **Deploy:** no ar no **Railway** (Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn; `runtime.txt` em 3.12.10 (fix mise). `seed_demo` popula treinador/atleta demo.
+- **Testes:** 54 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
@@ -52,7 +56,8 @@ runner/services/strava.py    # cliente OAuth + API Strava (sync agora reconcilia
 runner/services/garmin.py    # placeholder (aguardando aprovação; inclui contrato sync_wellness)
 runner/services/metrics.py   # pace, volume, evolução, ACWR, Riegel, PRs, adherence, split_fade
 runner/services/matching.py  # casa Activity ↔ PlannedWorkout (planejado × realizado)
-runner/services/plans.py     # gerador de macrociclo (plano de prova periodizado)
+runner/services/fitness.py   # perfil de aptidão (lê todo o histórico → FitnessProfile)
+runner/services/plans.py     # gerador de macrociclo dirigido pelo FitnessProfile
 runner/services/ai.py        # wrapper fino sobre a Claude (compartilhado), fallback honesto
 runner/services/coaching.py  # auto_prescribe, triage_roster, analyze_workout, copiloto
 runner/services/wellness.py  # prontidão (heurística transparente) + ponto de extensão p/ ML

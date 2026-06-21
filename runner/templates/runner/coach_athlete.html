@@ -30,6 +30,9 @@
 </div>
 {% endif %}
 
+<!-- Perfil de aptidão (base do plano) -->
+{% include "runner/_fitness_profile.html" with fitness=fitness %}
+
 <!-- Semana prescrita -->
 <div class="page-head" style="margin-top:8px">
   <p class="section-label" style="margin:0">Semana de {{ week.monday|date:"d/m" }}</p>

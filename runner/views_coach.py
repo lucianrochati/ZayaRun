@@ -22,7 +22,7 @@ from runner.models import (
     TrainingPlan,
     WorkoutFeedback,
 )
-from runner.services import ai, coaching, metrics, plans, wellness
+from runner.services import ai, coaching, fitness, metrics, plans, wellness
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +212,7 @@ def coach_athlete(request, athlete_id):
         "trend": metrics.evolution_trend(activities),
         "week": planned_week(athlete),
         "adherence": metrics.plan_adherence_rate(recent_planned),
+        "fitness": fitness.update_profile(athlete),
         "plan": athlete.training_plans.filter(status=TrainingPlan.STATUS_ACTIVE).first(),
         "workout_types": WORKOUT_TYPES,
         "race_choices": RACE_CHOICES,
@@ -303,6 +304,7 @@ def my_plan(request):
         "week": planned_week(request.user),
         "upcoming": upcoming,
         "race_choices": RACE_CHOICES,
+        "fitness": fitness.update_profile(request.user),
         "readiness": wellness.readiness(request.user),
         "today_checkin": DailyCheckin.objects.filter(
             athlete=request.user, date=timezone.localdate()

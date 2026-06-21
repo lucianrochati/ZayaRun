@@ -1,0 +1,32 @@
+{% comment %}Card do perfil de aptidão. Espera: fitness (FitnessProfile).{% endcomment %}
+{% if fitness %}
+<div class="card">
+  <div class="card-head">
+    <h3>Perfil de aptidão</h3>
+    <span class="pill {% if fitness.confidence == 'high' %}pill-ideal{% elif fitness.confidence == 'medium' %}pill-baixa{% else %}pill-atencao{% endif %}">
+      {{ fitness.level_label }} · confiança {{ fitness.confidence_label|lower }}
+    </span>
+  </div>
+  <div class="plan-summary">
+    <article class="kpi"><span class="kpi-label">Volume típico</span>
+      <span class="kpi-value">{{ fitness.weekly_volume_km }}<small>km/sem</small></span></article>
+    <article class="kpi"><span class="kpi-label">Frequência</span>
+      <span class="kpi-value">{{ fitness.runs_per_week }}<small>x/sem</small></span></article>
+    <article class="kpi"><span class="kpi-label">Maior longão</span>
+      <span class="kpi-value">{{ fitness.longest_run_km }}<small>km</small></span></article>
+    <article class="kpi"><span class="kpi-label">Pico histórico</span>
+      <span class="kpi-value">{{ fitness.peak_weekly_km }}<small>km</small></span></article>
+  </div>
+  {% if fitness.easy_pace_str or fitness.threshold_pace_str %}
+  <div class="zones">
+    {% if fitness.easy_pace_str %}<span class="zone"><b>Fácil</b> {{ fitness.easy_pace_str }}/km</span>{% endif %}
+    {% if fitness.threshold_pace_str %}<span class="zone"><b>Limiar</b> {{ fitness.threshold_pace_str }}/km</span>{% endif %}
+    {% if fitness.recent_effort_pace_str %}<span class="zone"><b>Esforço</b> {{ fitness.recent_effort_pace_str }}/km</span>{% endif %}
+  </div>
+  {% endif %}
+  <p class="card-sub">
+    {{ fitness.weeks_of_data }} semanas de dados · {{ fitness.consistency_pct }}% de consistência ·
+    tendência {{ fitness.trend_label|lower }}. <b>É daqui que o plano é construído.</b>
+  </p>
+</div>
+{% endif %}
