@@ -60,6 +60,23 @@ def _pace_range_str(paces, kind):
     return f"{metrics.format_pace(lo)}–{metrics.format_pace(hi)}/km"
 
 
+def _rest_txt(seconds):
+    """Tempo de descanso 'limpo' (arredondado a 5 s): '80s' ou '2min30'."""
+    s = int(round(seconds / 5.0) * 5)
+    if s < 90:
+        return f"{s}s"
+    m, sec = divmod(s, 60)
+    return f"{m}min" if sec == 0 else f"{m}min{sec:02d}"
+
+
+def _recovery_seconds(rec_m, paces):
+    """Descanso entre repetições (s) = trote de recuperação × pace de trote (Z1–Z2)."""
+    rec_pace = max(paces.get("recovery") or (0, 0))  # o mais lento da faixa
+    if not rec_pace:
+        rec_pace = max(paces.get("easy") or (360, 360))
+    return round(rec_m / 1000.0 * rec_pace)
+
+
 def _intensity_policy(profile, conservative):
     """
     Calibra a INTENSIDADE-teto pelo nível REAL do atleta + blindagem clínica.
@@ -100,28 +117,28 @@ RACE_PRESETS = OrderedDict(
         (5_000, {
             "label": "5 km", "taper_weeks": 1, "long_cap_km": 14,
             "peak_cap_km": 55, "runs": 4, "tempo_km": 4,
-            "interval": {"reps": 6, "dist_m": 800, "rec": "200m de trote"},
+            "interval": {"reps": 6, "dist_m": 800, "rec": "200m de trote", "rec_m": 200},
             "offsets": {"recovery": (70, 95), "easy": (45, 65), "long": (40, 60),
                          "tempo": (15, 30), "interval": (-20, -5)},
         }),
         (10_000, {
             "label": "10 km", "taper_weeks": 1, "long_cap_km": 18,
             "peak_cap_km": 65, "runs": 4, "tempo_km": 6,
-            "interval": {"reps": 5, "dist_m": 1000, "rec": "200m de trote"},
+            "interval": {"reps": 5, "dist_m": 1000, "rec": "200m de trote", "rec_m": 200},
             "offsets": {"recovery": (70, 95), "easy": (45, 65), "long": (35, 55),
                          "tempo": (5, 20), "interval": (-25, -10)},
         }),
         (21_097, {
             "label": "21 km (meia)", "taper_weeks": 2, "long_cap_km": 24,
             "peak_cap_km": 80, "runs": 5, "tempo_km": 8,
-            "interval": {"reps": 5, "dist_m": 1000, "rec": "200m de trote"},
+            "interval": {"reps": 5, "dist_m": 1000, "rec": "200m de trote", "rec_m": 200},
             "offsets": {"recovery": (75, 100), "easy": (50, 70), "long": (30, 50),
                          "tempo": (-10, 5), "interval": (-30, -15)},
         }),
         (42_195, {
             "label": "42 km (maratona)", "taper_weeks": 3, "long_cap_km": 34,
             "peak_cap_km": 110, "runs": 5, "tempo_km": 12,
-            "interval": {"reps": 4, "dist_m": 1600, "rec": "400m de trote"},
+            "interval": {"reps": 4, "dist_m": 1600, "rec": "400m de trote", "rec_m": 400},
             "offsets": {"recovery": (80, 105), "easy": (55, 75), "long": (25, 45),
                          "tempo": (-20, -5), "interval": (-35, -20)},
         }),
@@ -374,16 +391,19 @@ def _quality_session(date, phase, paces, preset, quali_km, intensity=None):
         strides_km = 0.6
         total_km = quali_km + strides_km
         zone = intensity["strides_zone"]
+        rest_s = 45  # caminhada de recuperação entre os tiros curtos
         return {
             "date": date, "weekday": wd, "workout_type": "strides",
             "title": f"Rodagem + tiros — {_km_txt(total_km)} km",
             "description": (
                 f"{_km_txt(quali_km)} km soltos em {Z2} + 6×100 m progressivos no fim "
-                f"em {zone}{pace_txt} ({intensity['strides_note']})."
+                f"em {zone}{pace_txt} ({intensity['strides_note']}; "
+                f"~{_rest_txt(rest_s)} de caminhada entre eles)."
             ),
             "target_distance_m": round(total_km * 1000), **_pace_kw(paces, "easy"),
             "structure": [{
-                "reps": 6, "distance_m": 100, "note": "progressivo", "recovery": "caminhada",
+                "reps": 6, "distance_m": 100, "note": "progressivo",
+                "recovery": "caminhada", "recovery_s": rest_s,
                 "target_pace_low_s": paces[intensity["pace_kind"]][0],
                 "target_pace_high_s": paces[intensity["pace_kind"]][1],
             }],
@@ -409,16 +429,21 @@ def _quality_session(date, phase, paces, preset, quali_km, intensity=None):
         iv = preset["interval"]
         work_km = iv["reps"] * iv["dist_m"] / 1000.0
         total_km = work_km + 3  # aquecimento 2 km + tiros + 1 km solto
+        rest_s = _recovery_seconds(iv.get("rec_m", 200), paces)  # descanso entre repetições
         return {
             "date": date, "weekday": wd, "workout_type": "interval",
             "title": f"Intervalado {iv['reps']}×{iv['dist_m']} m",
             "description": (
                 f"Aquecimento 2 km em {Z2} + {iv['reps']}×{iv['dist_m']} m forte em "
-                f"{intensity['strides_zone']}{pace_txt} ({iv['rec']}) + 1 km solto. "
+                f"{intensity['strides_zone']}{pace_txt}, com ~{_rest_txt(rest_s)} de "
+                f"descanso ({iv['rec']}) entre as repetições + 1 km solto. "
                 f"Volume total ≈ {_km_txt(total_km)} km."
             ),
             "target_distance_m": round(total_km * 1000), **_pace_kw(paces, "interval"),
-            "structure": [{"reps": iv["reps"], "distance_m": iv["dist_m"], "recovery": iv["rec"]}],
+            "structure": [{
+                "reps": iv["reps"], "distance_m": iv["dist_m"],
+                "recovery": iv["rec"], "recovery_s": rest_s,
+            }],
         }
 
     # Pico (e demais): ritmo/limiar — Z4 (forte) ou Z3 (conservador/iniciante).

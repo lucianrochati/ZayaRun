@@ -349,6 +349,29 @@ class PlanGeneratorTests(TestCase):
         self.assertIn("~", s["description"])            # pace-alvo dos tiros ("~m:ss/km")
         self.assertTrue(s["structure"][0].get("target_pace_low_s"))
 
+    def test_rest_seconds_on_rep_workouts(self):
+        """Treinos com séries informam o descanso (s) entre repetições."""
+        from runner.models import Anamnese
+        from runner.services import plans
+
+        user = User.objects.create_user("rest", password="x")
+        an = Anamnese.objects.create(
+            athlete=user, sessions_per_week=4,
+            available_days=[1, 2, 4, 6], preferred_long_day=6,
+        )
+        race = timezone.localdate() + timedelta(days=7 * 14 + 1)
+        spec = plans.generate_plan(self._activities(), 10_000, race, anamnese=an)
+        keyed = [w for w in spec["workouts"] if w["workout_type"] in ("interval", "strides")]
+        self.assertTrue(keyed)
+        for w in keyed:
+            st = w["structure"][0]
+            self.assertGreater(st.get("recovery_s", 0), 0)         # descanso em segundos
+            self.assertIn(plans._rest_txt(st["recovery_s"]), w["description"])  # aparece no texto
+        # Treino contínuo (longão) não inventa descanso entre repetições.
+        longs = [w for w in spec["workouts"] if w["workout_type"] == "long"]
+        self.assertTrue(all("recovery_s" not in (w["structure"][0] if w["structure"] else {})
+                            for w in longs))
+
     def test_volumes_positive_and_taper(self):
         from runner.services import plans
 
