@@ -267,9 +267,9 @@ def answer_question(athlete, question):
                 "Strava e sincronize algumas corridas primeiro.")
     if not ai.is_enabled():
         return ("O copiloto com IA está desligado. Configure uma chave gratuita "
-                "GEMINI_API_KEY (Google AI Studio) — ou ANTHROPIC_API_KEY — no "
-                "ambiente. Enquanto isso, seu painel já traz pace, carga (ACWR) e "
-                "projeção de provas — boa parte das respostas está lá.")
+                "GROQ_API_KEY (console.groq.com, sem cartão) — ou GEMINI_API_KEY / "
+                "ANTHROPIC_API_KEY — no ambiente. Enquanto isso, seu painel já traz "
+                "pace, carga (ACWR) e projeção de provas — boa parte das respostas está lá.")
     text = ai.complete(
         SYSTEM_COPILOT,
         f"Pergunta do atleta: {question}\n\nDados do atleta (JSON):\n"

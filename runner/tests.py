@@ -812,39 +812,55 @@ class AnamneseTests(TestCase):
 
 
 class AIProviderTests(TestCase):
-    """Resolução de provedor de IA (gratuito Gemini > Claude > regras)."""
+    """Resolução de provedor de IA (gratuitos Groq > Gemini > Claude > regras)."""
+
+    NO_KEYS = {"GROQ_API_KEY": "", "GEMINI_API_KEY": "", "ANTHROPIC_API_KEY": ""}
 
     def test_no_keys_falls_back_to_rules(self):
         from runner.services import ai
 
-        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "", "ANTHROPIC_API_KEY": ""}), \
-                self.settings(AI_PROVIDER="auto"):
+        with mock.patch.dict(os.environ, self.NO_KEYS), self.settings(AI_PROVIDER="auto"):
             self.assertIsNone(ai.provider())
             self.assertFalse(ai.is_enabled())
 
     def test_gemini_key_enables_free_provider(self):
         from runner.services import ai
 
-        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "k", "ANTHROPIC_API_KEY": ""}), \
+        with mock.patch.dict(os.environ, {**self.NO_KEYS, "GEMINI_API_KEY": "k"}), \
                 self.settings(AI_PROVIDER="auto"):
             self.assertEqual(ai.provider(), "gemini")
             self.assertTrue(ai.is_enabled())
 
+    def test_groq_preferred_in_auto(self):
+        """Groq (grátis, sem cartão) vem antes do Gemini no modo auto."""
+        from runner.services import ai
+
+        with mock.patch.dict(os.environ, {**self.NO_KEYS, "GROQ_API_KEY": "g", "GEMINI_API_KEY": "k"}), \
+                self.settings(AI_PROVIDER="auto"):
+            self.assertEqual(ai.provider(), "groq")
+
+    def test_explicit_provider_respected(self):
+        from runner.services import ai
+
+        with mock.patch.dict(os.environ, {**self.NO_KEYS, "GROQ_API_KEY": "g", "GEMINI_API_KEY": "k"}), \
+                self.settings(AI_PROVIDER="gemini"):
+            self.assertEqual(ai.provider(), "gemini")
+
     def test_rules_setting_disables_even_with_key(self):
         from runner.services import ai
 
-        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "k"}), \
+        with mock.patch.dict(os.environ, {**self.NO_KEYS, "GROQ_API_KEY": "g"}), \
                 self.settings(AI_PROVIDER="rules"):
             self.assertIsNone(ai.provider())
 
-    def test_gemini_request_without_key(self):
-        """Sem chave, gemini_request devolve (None, motivo) sem levantar exceção."""
+    def test_groq_request_without_key(self):
+        """Sem chave, groq_request devolve (None, motivo) sem levantar exceção."""
         from runner.services import ai
 
-        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
-            text, debug = ai.gemini_request("sys", "oi", max_tokens=10)
+        with mock.patch.dict(os.environ, {"GROQ_API_KEY": ""}):
+            text, debug = ai.groq_request("sys", "oi", max_tokens=10)
             self.assertIsNone(text)
-            self.assertIn("GEMINI_API_KEY", debug)
+            self.assertIn("GROQ_API_KEY", debug)
 
 
 class PWATests(TestCase):

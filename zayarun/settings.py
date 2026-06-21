@@ -145,12 +145,14 @@ INSIGHT_MODEL = os.environ.get("INSIGHT_MODEL", "claude-opus-4-8")
 # A chave da Claude e lida do ambiente pelo SDK: ANTHROPIC_API_KEY
 
 # --- IA (copiloto / prescricao / feedback) ---
-# AI_PROVIDER: "auto" (usa a chave que existir, priorizando a gratuita Gemini),
-# "gemini" (Google AI Studio, GRATIS), "claude" ou "rules" (sem IA).
-# Em "auto", basta definir GEMINI_API_KEY (gratuita) para ligar a IA.
+# AI_PROVIDER: "auto" (usa a chave que existir, priorizando as gratuitas
+# Groq -> Gemini), "groq" (GRATIS, sem cartao), "gemini" (Google AI Studio),
+# "claude" ou "rules" (sem IA). Em "auto", basta uma chave gratuita p/ ligar.
 AI_PROVIDER = os.environ.get("AI_PROVIDER", os.environ.get("INSIGHT_PROVIDER", "auto"))
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-# Chaves lidas do ambiente: GEMINI_API_KEY (gratis) e/ou ANTHROPIC_API_KEY.
+# Chaves do ambiente: GROQ_API_KEY (gratis, sem cartao), GEMINI_API_KEY e/ou
+# ANTHROPIC_API_KEY.
 
 # --- Integracao Strava ---
 STRAVA_CLIENT_ID = os.environ.get("STRAVA_CLIENT_ID", "")

@@ -44,24 +44,33 @@ def ai_diag(request):
 
     if not request.user.is_staff:
         raise Http404()
+    qk = ai.groq_key()
     gk = ai.gemini_key()
-    fmt = (f"({gk[:6]}… {len(gk)} chars)"
-           + ("  ✅ AIza" if gk.startswith("AIza") else "  ⚠️ não-AIza")) if gk else "AUSENTE"
+    prov = ai.provider()
+    gfmt = (f"({gk[:6]}… {len(gk)} chars)"
+            + ("  ✅ AIza" if gk.startswith("AIza") else "  ⚠️ não-AIza")) if gk else "AUSENTE"
     lines = [
         f"AI_PROVIDER     : {getattr(settings, 'AI_PROVIDER', 'auto')}",
+        f"GROQ_MODEL      : {getattr(settings, 'GROQ_MODEL', '-')}",
         f"GEMINI_MODEL    : {getattr(settings, 'GEMINI_MODEL', '-')}",
-        f"provider()      : {ai.provider()}",
-        f"GEMINI_API_KEY  : {fmt}",
+        f"provider()      : {prov}",
+        f"GROQ_API_KEY    : {('presente (' + qk[:5] + '… ' + str(len(qk)) + ' chars)') if qk else 'AUSENTE'}",
+        f"GEMINI_API_KEY  : {gfmt}",
         f"ANTHROPIC_KEY   : {'presente' if ai.anthropic_key() else 'ausente'}",
         "-" * 64,
     ]
-    if ai.provider() == "gemini":
+    if prov == "groq":
+        text, debug = ai.groq_request("Você é um teste.", "Responda apenas: pong.", max_tokens=50)
+        lines.append(f"groq_request    : {debug}")
+        if text:
+            lines.append(f"resposta        : {text}")
+    elif prov == "gemini":
         text, debug = ai.gemini_request("Você é um teste.", "Responda apenas: pong.", max_tokens=50)
         lines.append(f"gemini_request  : {debug}")
         if text:
             lines.append(f"resposta        : {text}")
     else:
-        lines.append("(provider != gemini — nada a testar)")
+        lines.append(f"(provider={prov} — nada a testar via HTTP)")
     return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
 
 

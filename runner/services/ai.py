@@ -23,6 +23,11 @@ DEFAULT_TTL = 60 * 60  # 1h
 GEMINI_ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
+GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+
+
+def groq_key():
+    return os.environ.get("GROQ_API_KEY")
 
 
 def gemini_key():
@@ -35,14 +40,14 @@ def anthropic_key():
 
 def has_key():
     """Existe alguma chave de IA configurada?"""
-    return bool(gemini_key() or anthropic_key())
+    return bool(groq_key() or gemini_key() or anthropic_key())
 
 
 def provider():
     """
-    Resolve o provedor ativo a partir de AISettings + chaves disponíveis.
-    "auto" prioriza a opção GRATUITA (Gemini) e cai para a Claude.
-    Retorna "gemini", "claude" ou None (sem IA → fallback por regras).
+    Resolve o provedor ativo a partir de AI_PROVIDER + chaves disponíveis.
+    "auto" prioriza as gratuitas (Groq → Gemini) e cai para a Claude.
+    Retorna "groq", "gemini", "claude" ou None (sem IA → fallback por regras).
     """
     pref = (getattr(settings, "AI_PROVIDER", "auto") or "auto").lower()
     # Em "auto", um INSIGHT_PROVIDER=rules explícito também desliga a IA (compat).
@@ -52,11 +57,15 @@ def provider():
         return None
     if pref == "rules":
         return None
+    if pref == "groq":
+        return "groq" if groq_key() else None
     if pref == "gemini":
         return "gemini" if gemini_key() else None
     if pref == "claude":
         return "claude" if anthropic_key() else None
-    # auto: a gratuita primeiro
+    # auto: gratuitas primeiro (Groq não exige cartão), Claude por último
+    if groq_key():
+        return "groq"
     if gemini_key():
         return "gemini"
     if anthropic_key():
@@ -115,6 +124,54 @@ def _complete_gemini(system, user_text, max_tokens, temperature):
     return text
 
 
+def groq_request(system, user_text, max_tokens=500, temperature=None):
+    """
+    Chamada crua ao Groq (API compatível com OpenAI). Retorna (text, debug) —
+    text=None em falha, com `debug` legível. NÃO levanta exceção.
+    """
+    key = groq_key()
+    if not key:
+        return None, "sem GROQ_API_KEY"
+    model = getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
+    body = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_text},
+        ],
+        "max_tokens": max_tokens,
+    }
+    if temperature is not None:
+        body["temperature"] = temperature
+    try:
+        resp = requests.post(
+            GROQ_ENDPOINT,
+            headers={"Authorization": f"Bearer {key}"},
+            json=body, timeout=30,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return None, f"erro de rede: {exc!r}"
+    if resp.status_code == 429:
+        return None, f"HTTP 429 cota/limite: {resp.text[:400]}"
+    if resp.status_code != 200:
+        return None, f"HTTP {resp.status_code}: {resp.text[:400]}"
+    data = resp.json()
+    choices = data.get("choices") or []
+    if not choices:
+        return None, f"sem choices: {str(data)[:300]}"
+    text = (choices[0].get("message", {}).get("content") or "").strip()
+    if not text:
+        return None, f"resposta vazia (finish={choices[0].get('finish_reason')})"
+    return text, "ok"
+
+
+def _complete_groq(system, user_text, max_tokens, temperature):
+    text, debug = groq_request(system, user_text, max_tokens, temperature)
+    if text is None:
+        logger.error("Groq falhou: %s", debug)
+    return text
+
+
 def _complete_claude(system, user_text, max_tokens, temperature):
     import anthropic
 
@@ -146,7 +203,9 @@ def complete(system, user_text, max_tokens=500, cache_key=None, temperature=None
         return None
 
     try:
-        if prov == "gemini":
+        if prov == "groq":
+            text = _complete_groq(system, user_text, max_tokens, temperature)
+        elif prov == "gemini":
             text = _complete_gemini(system, user_text, max_tokens, temperature)
         else:
             text = _complete_claude(system, user_text, max_tokens, temperature)

@@ -17,12 +17,16 @@ class Command(BaseCommand):
         parser.add_argument("prompt", nargs="?", default="Responda apenas: pong.")
 
     def handle(self, *args, **opts):
+        qk = ai.groq_key()
         gk = ai.gemini_key()
         ak = ai.anthropic_key()
+        prov = ai.provider()
         w = self.stdout.write
         w(f"AI_PROVIDER (settings) : {getattr(settings, 'AI_PROVIDER', 'auto')}")
+        w(f"GROQ_MODEL             : {getattr(settings, 'GROQ_MODEL', '-')}")
         w(f"GEMINI_MODEL           : {getattr(settings, 'GEMINI_MODEL', '-')}")
-        w(f"provider() resolvido   : {ai.provider()}")
+        w(f"provider() resolvido   : {prov}")
+        w(f"GROQ_API_KEY           : {('presente — ' + qk[:5] + '…, ' + str(len(qk)) + ' chars') if qk else 'AUSENTE'}")
         if gk:
             w(f"GEMINI_API_KEY         : presente — prefixo '{gk[:4]}…', {len(gk)} chars"
               + ("  ✅ formato de API key" if gk.startswith("AIza")
@@ -32,7 +36,12 @@ class Command(BaseCommand):
         w(f"ANTHROPIC_API_KEY      : {'presente' if ak else 'ausente'}")
         w("-" * 60)
 
-        if ai.provider() == "gemini":
+        if prov == "groq":
+            text, debug = ai.groq_request("Você é um teste.", opts["prompt"], max_tokens=60)
+            w(f"Groq diag              : {debug}")
+            if text:
+                w(f"Resposta               : {text}")
+        elif prov == "gemini":
             text, debug = ai.gemini_request("Você é um teste.", opts["prompt"], max_tokens=60)
             w(f"Gemini diag            : {debug}")
             if text:
