@@ -34,4 +34,6 @@ urlpatterns = [
     path("treino/<int:planned_id>/feedback/", views_coach.workout_feedback, name="workout_feedback"),
     path("checkin/", views_coach.daily_checkin, name="daily_checkin"),
     path("copiloto/", views_coach.copilot, name="copilot"),
+    path("anamnese/", views_coach.edit_anamnese, name="edit_anamnese"),
+    path("treinador/atleta/<int:athlete_id>/anamnese/", views_coach.edit_anamnese, name="edit_anamnese_athlete"),
 ]

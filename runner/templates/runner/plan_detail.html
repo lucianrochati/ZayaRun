@@ -42,6 +42,13 @@
   {{ done_total }}/{{ count_total }} treinos realizados. Toque em ✎ para editar ou 🗑 para remover um treino.
 </p>
 
+{% if plan.notes %}
+<div class="card note-clinic">
+  <div class="card-head"><h3>⚠️ Atenção do treinador</h3></div>
+  {% for line in plan.notes.splitlines %}{% if line %}<p class="insight-text">• {{ line }}</p>{% endif %}{% endfor %}
+</div>
+{% endif %}
+
 <!-- Macrociclo: semana a semana -->
 {% for week in weeks %}
   <div class="week-block {% if week.is_current %}week-current{% endif %} {% if week.is_past %}week-past{% endif %}">

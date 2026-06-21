@@ -147,6 +147,32 @@ def compute_profile(activities):
     }
 
 
+def infer_training_days(activities):
+    """
+    Dias da semana (0=Seg..6=Dom) em que o atleta costuma treinar, lidos do
+    histórico. Usado para pré-preencher a anamnese. Considera dias com pelo
+    menos ~12% das corridas (filtra eventuais treinos avulsos).
+    """
+    from collections import Counter
+
+    runs = metrics.only_runs(activities)
+    if not runs:
+        return []
+    counter = Counter(timezone.localtime(a.start_date).date().weekday() for a in runs)
+    total = sum(counter.values())
+    threshold = max(1, total * 0.12)
+    return sorted(d for d, n in counter.items() if n >= threshold)
+
+
+def infer_long_day(activities):
+    """Dia em que o atleta faz as corridas mais longas (default domingo)."""
+    runs = metrics.only_runs(activities)
+    if not runs:
+        return 6
+    longest = max(runs, key=lambda a: a.distance_m)
+    return timezone.localtime(longest.start_date).date().weekday()
+
+
 def update_profile(athlete):
     """Computa e persiste o FitnessProfile do atleta. Retorna a instância ou None."""
     data = compute_profile(list(athlete.activities.all()))

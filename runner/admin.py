@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from runner.models import (
     Activity,
+    Anamnese,
     CoachAthlete,
     DailyCheckin,
     FitnessProfile,
@@ -95,6 +96,20 @@ class DailyCheckinAdmin(admin.ModelAdmin):
     list_filter = ("source",)
     search_fields = ("athlete__username",)
     date_hierarchy = "date"
+
+
+@admin.register(Anamnese)
+class AnamneseAdmin(admin.ModelAdmin):
+    list_display = (
+        "athlete",
+        "sessions_per_week",
+        "preferred_long_day",
+        "surface",
+        "has_pain_now",
+        "updated_at",
+    )
+    list_filter = ("surface", "has_pain_now", "does_strength")
+    search_fields = ("athlete__username",)
 
 
 @admin.register(FitnessProfile)

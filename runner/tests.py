@@ -538,6 +538,18 @@ class ViewSmokeTests(TestCase):
         self.assertEqual(self.client.get(reverse("edit_workout", args=[w.id])).status_code, 404)
         self.assertEqual(self.client.post(reverse("delete_workout", args=[w.id])).status_code, 404)
 
+    def test_anamnese_form_and_save(self):
+        from runner.models import Anamnese
+
+        self.assertEqual(self.client.get(reverse("edit_anamnese")).status_code, 200)
+        self.client.post(reverse("edit_anamnese"), {
+            "available_days": ["1", "3", "5"], "sessions_per_week": "3",
+            "preferred_long_day": "6", "has_pain_now": "on", "injury_history": "canelite",
+        })
+        an = Anamnese.objects.get(athlete=self.user)
+        self.assertEqual(an.available_days, [1, 3, 5])
+        self.assertTrue(an.has_pain_now)
+
 
 @override_settings(STORAGES={
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -662,3 +674,58 @@ class FitnessProfileTests(TestCase):
         self.assertIsNotNone(prof)
         self.assertTrue(FitnessProfile.objects.filter(athlete=self.user).exists())
         self.assertGreater(prof.weekly_volume_km, 0)
+
+
+class ScheduleTests(TestCase):
+    """Agenda da semana: respeita dias e espaça os treinos-chave."""
+
+    def test_hard_days_never_adjacent_default(self):
+        from runner.services import plans
+
+        sched = plans.weekly_schedule([0, 1, 2, 3, 4, 5, 6], 4, 6)
+        self.assertFalse(plans.hard_days_adjacent(sched))
+
+    def test_respects_available_days(self):
+        from runner.services import plans
+
+        sched = plans.weekly_schedule([0, 2, 4, 6], 4, 6)  # seg/qua/sex/dom
+        self.assertEqual([wd for wd, _ in sched], [0, 2, 4, 6])
+        self.assertFalse(plans.hard_days_adjacent(sched))
+
+    def test_long_day_is_honored(self):
+        from runner.services import plans
+
+        sched = plans.weekly_schedule([1, 2, 3, 5], 3, 5)  # longão no sábado
+        self.assertEqual([wd for wd, r in sched if r == "long"], [5])
+
+
+class AnamneseTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("an", password="x")
+
+    def test_plan_uses_anamnese_days(self):
+        from runner.models import Anamnese
+        from runner.services import plans
+
+        an = Anamnese.objects.create(
+            athlete=self.user, sessions_per_week=4,
+            available_days=[0, 2, 4, 6], preferred_long_day=6,
+        )
+        race = timezone.localdate() + timedelta(days=7 * 8)
+        spec = plans.generate_plan([], 10_000, race, anamnese=an)
+        wkdays = {w["weekday"] for w in spec["workouts"] if w["workout_type"] != "race"}
+        self.assertTrue(wkdays.issubset({0, 2, 4, 6}))
+        self.assertTrue(spec["meta"]["from_anamnese"])
+
+    def test_pain_triggers_conservative_and_warning(self):
+        from runner.models import Anamnese
+        from runner.services import plans
+
+        an = Anamnese.objects.create(
+            athlete=self.user, available_days=[1, 3, 5],
+            has_pain_now=True, pain_where="joelho",
+        )
+        race = timezone.localdate() + timedelta(days=7 * 10)
+        spec = plans.generate_plan([], 21_097, race, anamnese=an)
+        self.assertTrue(spec["meta"]["conservative"])
+        self.assertTrue(any("dor" in w.lower() for w in spec["meta"]["safety_warnings"]))

@@ -1,0 +1,86 @@
+{% extends "runner/base.html" %}
+{% block title %}Anamnese · ZayaRun{% endblock %}
+{% block content %}
+<p style="margin-top:4px"><a class="link-btn" href="{{ back_url }}">← Voltar</a></p>
+
+<div class="page-head">
+  <div><p class="eyebrow">Anamnese{% if is_coach_view %} · {{ athlete_name }}{% endif %}</p>
+    <h1>Antes de montar o treino</h1></div>
+</div>
+
+<p class="card-sub" style="margin:0 4px 10px">
+  Isso deixa o plano <b>realista e seguro</b>: respeita seus dias, espaça os treinos fortes e
+  considera lesões. {% if inferred_days_labels %}Pela sua Strava, você costuma treinar em: <b>{{ inferred_days_labels }}</b> — já deixei marcado, confira.{% endif %}
+</p>
+
+<form action="{% if is_coach_view %}{% url 'edit_anamnese_athlete' athlete.id %}{% else %}{% url 'edit_anamnese' %}{% endif %}" method="post">
+  {% csrf_token %}
+
+  <!-- Disponibilidade -->
+  <div class="card">
+    <h3>Disponibilidade</h3>
+    <div class="field" style="margin-bottom:8px"><span>Dias que você consegue treinar</span>
+      <div class="day-picker">
+        {% for val, label in weekday_options %}
+          <label class="day-opt">
+            <input type="checkbox" name="available_days" value="{{ val }}" {% if val in selected_days %}checked{% endif %}>
+            <span>{{ label }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="form-grid">
+      <label class="field" style="margin:0"><span>Quantos treinos/semana</span>
+        <input type="number" name="sessions_per_week" min="2" max="7" value="{{ prefill.sessions }}"></label>
+      <label class="field" style="margin:0"><span>Dia do longão</span>
+        <select name="preferred_long_day">
+          {% for val, label in weekday_options %}<option value="{{ val }}" {% if val == prefill.long_day %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select></label>
+      <label class="field" style="margin:0"><span>Horário preferido</span>
+        <select name="preferred_time">
+          {% for k, l in time_choices %}<option value="{{ k }}" {% if k == prefill.time %}selected{% endif %}>{{ l }}</option>{% endfor %}
+        </select></label>
+      <label class="field" style="margin:0"><span>Terreno</span>
+        <select name="surface">
+          {% for k, l in surface_choices %}<option value="{{ k }}" {% if k == prefill.surface %}selected{% endif %}>{{ l }}</option>{% endfor %}
+        </select></label>
+    </div>
+  </div>
+
+  <!-- Olhar clínico -->
+  <div class="card">
+    <h3>Saúde & histórico <span class="muted small">(blindagem)</span></h3>
+    <label class="check-row">
+      <input type="checkbox" name="has_pain_now" {% if prefill.pain %}checked{% endif %}>
+      <span>Sinto <b>dor ou desconforto</b> agora</span>
+    </label>
+    <label class="field" style="margin:8px 0"><span>Se sim, onde?</span>
+      <input type="text" name="pain_where" value="{{ prefill.pain_where }}" placeholder="Ex.: joelho direito"></label>
+    <label class="field" style="margin:8px 0"><span>Histórico de lesões</span>
+      <textarea name="injury_history" placeholder="Ex.: canelite em 2024; entorse de tornozelo">{{ prefill.injury }}</textarea></label>
+    <label class="field" style="margin:8px 0"><span>Condições de saúde / medicação (opcional)</span>
+      <textarea name="health_notes" placeholder="Algo que o treino deva considerar">{{ prefill.health }}</textarea></label>
+    <div class="form-grid">
+      <label class="field" style="margin:0"><span>Idade</span>
+        <input type="number" name="age" min="10" max="100" value="{{ prefill.age }}"></label>
+      <label class="check-row" style="align-self:end">
+        <input type="checkbox" name="does_strength" {% if prefill.strength %}checked{% endif %}>
+        <span>Faço treino de força</span></label>
+    </div>
+    <label class="check-row" style="margin-top:8px">
+      <input type="checkbox" name="medical_clearance" {% if prefill.clearance %}checked{% endif %}>
+      <span>Estou <b>liberado(a) por um profissional</b> para correr</span>
+    </label>
+  </div>
+
+  <!-- Objetivo -->
+  <div class="card">
+    <h3>Objetivo & motivação</h3>
+    <label class="field" style="margin:0"><span>O que te move? (opcional)</span>
+      <textarea name="goal_note" placeholder="Ex.: terminar minha primeira meia sem lesão">{{ prefill.goal }}</textarea></label>
+  </div>
+
+  <button class="btn btn-primary" type="submit">Salvar anamnese</button>
+  <p class="card-sub" style="margin-top:10px">O ZayaRun não substitui avaliação médica. Em caso de dor persistente, procure um profissional.</p>
+</form>
+{% endblock %}

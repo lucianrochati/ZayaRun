@@ -359,6 +359,22 @@ textarea{resize:vertical;min-height:70px}
 .add-details > summary::-webkit-details-marker{display:none}
 .add-details[open] > summary{margin-bottom:0}
 
+/* ---------- Anamnese: seletor de dias + checkboxes + banner clínico ---------- */
+.day-picker{display:flex;gap:6px;flex-wrap:wrap}
+.day-opt{flex:1;min-width:42px;text-align:center;cursor:pointer}
+.day-opt input{display:none}
+.day-opt span{display:block;padding:10px 4px;border-radius:var(--r-sm);border:1px solid var(--border-strong);
+  background:var(--surface-2);font-size:13px;font-weight:600;color:var(--muted);transition:.15s}
+.day-opt:hover span{border-color:var(--brand)}
+.day-opt input:checked + span{border-color:var(--brand);background:rgba(255,90,54,.14);color:var(--text)}
+.check-row{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text);cursor:pointer;padding:6px 0}
+.check-row input{width:18px;height:18px;accent-color:var(--brand);flex:none}
+.note-clinic{border-left:4px solid var(--warn);background:linear-gradient(180deg,rgba(251,191,36,.08),var(--surface) 70%)}
+.note-clinic h3{color:var(--warn)}
+.anamnese-cta{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  background:linear-gradient(180deg,rgba(91,141,239,.10),var(--surface) 70%);
+  border:1px solid var(--border);border-left:4px solid var(--info);border-radius:var(--r-md);padding:12px 14px;margin:12px 0}
+
 /* ---------- Zonas de pace (perfil de aptidão) ---------- */
 .zones{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
 .zone{font-size:13px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);

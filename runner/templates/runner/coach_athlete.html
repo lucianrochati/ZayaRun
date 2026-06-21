@@ -33,6 +33,17 @@
 <!-- Perfil de aptidão (base do plano) -->
 {% include "runner/_fitness_profile.html" with fitness=fitness %}
 
+<!-- Anamnese do atleta -->
+<div class="anamnese-cta">
+  {% if anamnese %}
+    <span>📋 Anamnese ✓ · {{ anamnese.sessions_per_week }}×/sem nos dias {{ anamnese.available_days_labels|join:", " }}{% if anamnese.has_pain_now %} · <b style="color:var(--warn)">dor relatada</b>{% endif %}</span>
+    <a class="btn btn-sm btn-ghost" href="{% url 'edit_anamnese_athlete' athlete.id %}">Editar</a>
+  {% else %}
+    <span>📋 <b>Anamnese pendente</b> — preencha antes de montar o plano (dias, lesões, objetivo).</span>
+    <a class="btn btn-sm btn-primary" href="{% url 'edit_anamnese_athlete' athlete.id %}" style="width:auto">Preencher</a>
+  {% endif %}
+</div>
+
 <!-- Semana prescrita -->
 <div class="page-head" style="margin-top:8px">
   <p class="section-label" style="margin:0">Semana de {{ week.monday|date:"d/m" }}</p>

@@ -7,6 +7,17 @@
 <!-- Perfil de aptidão (base do plano) -->
 {% include "runner/_fitness_profile.html" with fitness=fitness %}
 
+<!-- Anamnese (antes de montar o treino) -->
+<div class="anamnese-cta">
+  {% if anamnese %}
+    <span>📋 Anamnese ✓ · {{ anamnese.sessions_per_week }}×/sem · longão {{ anamnese.long_day_label }}{% if anamnese.has_pain_now %} · <b style="color:var(--warn)">dor relatada</b>{% endif %}</span>
+    <a class="btn btn-sm btn-ghost" href="{% url 'edit_anamnese' %}">Editar anamnese</a>
+  {% else %}
+    <span>📋 <b>Faça sua anamnese</b> — dias disponíveis, lesões e objetivo. Deixa o plano seguro e realista.</span>
+    <a class="btn btn-sm btn-primary" href="{% url 'edit_anamnese' %}" style="width:auto">Preencher</a>
+  {% endif %}
+</div>
+
 <!-- Prontidão de hoje (heurística transparente) -->
 {% if readiness %}
 <div class="card">

@@ -136,6 +136,14 @@ def _gen_invite_code():
     return "".join(secrets.choice(alphabet) for _ in range(6))
 
 
+# Dias da semana (0=segunda ... 6=domingo) para anamnese e agenda de treino.
+WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+
+
+def weekday_labels(days):
+    return [WEEKDAYS[d] for d in sorted(days) if 0 <= d <= 6]
+
+
 class Profile(models.Model):
     """Perfil do usuario: papel (atleta/treinador) e parametros fisiologicos."""
 
@@ -541,3 +549,62 @@ class FitnessProfile(models.Model):
     @property
     def confidence_label(self):
         return dict(self.CONFIDENCE_CHOICES).get(self.confidence, self.confidence)
+
+
+class Anamnese(models.Model):
+    """
+    Anamnese do atleta (intake de treinador com olhar clínico): disponibilidade,
+    histórico de lesão, dor atual e contexto. Base para o gerador montar um
+    plano seguro e realista — e para a blindagem (avisos de risco).
+    """
+
+    SURFACE_CHOICES = [
+        ("road", "Rua / asfalto"),
+        ("trail", "Trail / montanha"),
+        ("both", "Ambos"),
+    ]
+    TIME_CHOICES = [
+        ("morning", "Manhã"),
+        ("afternoon", "Tarde"),
+        ("evening", "Noite"),
+        ("vary", "Varia"),
+    ]
+
+    athlete = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="anamnese"
+    )
+    # Disponibilidade de treino
+    sessions_per_week = models.IntegerField(default=4)
+    available_days = models.JSONField(default=list)      # ints 0=Seg ... 6=Dom
+    preferred_long_day = models.IntegerField(default=6)  # domingo
+    preferred_time = models.CharField(max_length=10, choices=TIME_CHOICES, default="vary")
+    # Contexto de treino
+    does_strength = models.BooleanField(default=False)
+    surface = models.CharField(max_length=8, choices=SURFACE_CHOICES, default="road")
+    age = models.IntegerField(null=True, blank=True)
+    goal_note = models.TextField(blank=True, default="")
+    # Olhar clínico / blindagem
+    injury_history = models.TextField(blank=True, default="")
+    has_pain_now = models.BooleanField(default=False)
+    pain_where = models.CharField(max_length=200, blank=True, default="")
+    health_notes = models.TextField(blank=True, default="")   # condições, medicação
+    medical_clearance = models.BooleanField(default=False)    # liberado por profissional
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Anamnese de {self.athlete.get_username()}"
+
+    @property
+    def available_days_labels(self):
+        return weekday_labels(self.available_days or [])
+
+    @property
+    def long_day_label(self):
+        d = self.preferred_long_day
+        return WEEKDAYS[d] if 0 <= d <= 6 else "—"
+
+    @property
+    def has_risk_flags(self):
+        return self.has_pain_now or bool((self.injury_history or "").strip())

@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -16,6 +17,7 @@ from django.views.decorators.http import require_POST
 
 from runner.models import (
     WORKOUT_TYPES,
+    Anamnese,
     CoachAthlete,
     DailyCheckin,
     PlannedWorkout,
@@ -214,6 +216,7 @@ def coach_athlete(request, athlete_id):
         "week": planned_week(athlete),
         "adherence": metrics.plan_adherence_rate(recent_planned),
         "fitness": fitness.update_profile(athlete),
+        "anamnese": _get_anamnese(athlete),
         "plan": athlete.training_plans.filter(status=TrainingPlan.STATUS_ACTIVE).first(),
         "workout_types": WORKOUT_TYPES,
         "race_choices": RACE_CHOICES,
@@ -283,12 +286,21 @@ def _build_plan_from_post(request, athlete, created_by, source):
         return None
     goal_time_s = _parse_duration(request.POST.get("goal_time", ""))
     spec = plans.generate_plan(
-        list(athlete.activities.all()), goal_distance_m, race_date, goal_time_s=goal_time_s
+        list(athlete.activities.all()), goal_distance_m, race_date,
+        goal_time_s=goal_time_s, anamnese=_get_anamnese(athlete),
     )
     return plans.materialize_plan(
         athlete, spec, created_by=created_by, source=source,
         generated_by=TrainingPlan.GEN_RULES,
     )
+
+
+def _get_anamnese(athlete):
+    """Anamnese do atleta (reverse OneToOne) sem estourar quando não existe."""
+    try:
+        return athlete.anamnese
+    except Exception:  # noqa: BLE001
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -307,6 +319,7 @@ def my_plan(request):
         "upcoming": upcoming,
         "race_choices": RACE_CHOICES,
         "fitness": fitness.update_profile(request.user),
+        "anamnese": _get_anamnese(request.user),
         "readiness": wellness.readiness(request.user),
         "today_checkin": DailyCheckin.objects.filter(
             athlete=request.user, date=timezone.localdate()
@@ -547,3 +560,75 @@ def add_workout_to_plan(request, plan_id):
     )
     messages.success(request, "Treino adicionado ao plano.")
     return redirect("plan_detail", plan_id=plan_id)
+
+
+# --------------------------------------------------------------------------
+# Anamnese: intake de treinador, pré-preenchido pela leitura da Strava
+# --------------------------------------------------------------------------
+WEEKDAY_OPTIONS = [(0, "Seg"), (1, "Ter"), (2, "Qua"), (3, "Qui"), (4, "Sex"), (5, "Sáb"), (6, "Dom")]
+
+
+@login_required
+def edit_anamnese(request, athlete_id=None):
+    athlete = request.user if athlete_id is None else get_object_or_404(User, pk=athlete_id)
+    if not _can_manage(request.user, athlete):
+        raise Http404("Atleta não encontrado.")
+    anamnese = _get_anamnese(athlete)
+    back_url = (
+        reverse("my_plan") if request.user == athlete
+        else reverse("coach_athlete", args=[athlete.id])
+    )
+
+    if request.method == "POST":
+        days = sorted({int(d) for d in request.POST.getlist("available_days") if d.isdigit()})
+        long_day = _to_int(request.POST.get("preferred_long_day"))
+        Anamnese.objects.update_or_create(athlete=athlete, defaults={
+            "sessions_per_week": _to_int(request.POST.get("sessions_per_week")) or (len(days) or 4),
+            "available_days": days,
+            "preferred_long_day": long_day if long_day is not None else 6,
+            "preferred_time": request.POST.get("preferred_time", "vary"),
+            "does_strength": bool(request.POST.get("does_strength")),
+            "surface": request.POST.get("surface", "road"),
+            "age": _to_int(request.POST.get("age")),
+            "goal_note": request.POST.get("goal_note", "").strip(),
+            "injury_history": request.POST.get("injury_history", "").strip(),
+            "has_pain_now": bool(request.POST.get("has_pain_now")),
+            "pain_where": request.POST.get("pain_where", "").strip(),
+            "health_notes": request.POST.get("health_notes", "").strip(),
+            "medical_clearance": bool(request.POST.get("medical_clearance")),
+        })
+        messages.success(request, "Anamnese salva — o plano agora respeita seus dias e seu histórico.")
+        return redirect(back_url)
+
+    # GET: pré-preenche da anamnese existente OU da leitura do histórico
+    activities = list(athlete.activities.all())
+    profile = fitness.compute_profile(activities)
+    inferred_days = fitness.infer_training_days(activities)
+    selected_days = anamnese.available_days if anamnese else (inferred_days or [1, 3, 5, 6])
+    prefill = {
+        "sessions": anamnese.sessions_per_week if anamnese else (profile["runs_per_week"] if profile else 4),
+        "long_day": anamnese.preferred_long_day if anamnese else fitness.infer_long_day(activities),
+        "time": anamnese.preferred_time if anamnese else "vary",
+        "surface": anamnese.surface if anamnese else "road",
+        "strength": anamnese.does_strength if anamnese else False,
+        "age": anamnese.age if anamnese else "",
+        "goal": anamnese.goal_note if anamnese else "",
+        "injury": anamnese.injury_history if anamnese else "",
+        "pain": anamnese.has_pain_now if anamnese else False,
+        "pain_where": anamnese.pain_where if anamnese else "",
+        "health": anamnese.health_notes if anamnese else "",
+        "clearance": anamnese.medical_clearance if anamnese else False,
+    }
+    return render(request, "runner/anamnese.html", {
+        "athlete": athlete,
+        "athlete_name": coaching._athlete_name(athlete),
+        "anamnese": anamnese,
+        "is_coach_view": request.user != athlete,
+        "weekday_options": WEEKDAY_OPTIONS,
+        "selected_days": selected_days,
+        "inferred_days_labels": ", ".join([dict(WEEKDAY_OPTIONS)[d] for d in inferred_days]) if inferred_days else "",
+        "prefill": prefill,
+        "surface_choices": Anamnese.SURFACE_CHOICES,
+        "time_choices": Anamnese.TIME_CHOICES,
+        "back_url": back_url,
+    })

@@ -14,7 +14,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from runner.models import PlannedWorkout, TrainingPlan
+from runner.models import PlannedWorkout, TrainingPlan, weekday_labels
 from runner.services import fitness, metrics
 
 MAX_WEEKS = 20  # planos mais longos começam no meio do caminho
@@ -171,23 +171,66 @@ def _pace_kw(paces, kind):
     return {"target_pace_low_s": lo, "target_pace_high_s": hi}
 
 
-def _easy_days(runs_per_week):
-    # dias de rodagem fácil; quali=qua(2) e longão=dom(6) são fixos.
-    if runs_per_week >= 5:
-        return [1, 3, 4]  # ter, qui, sex
-    if runs_per_week == 4:
-        return [1, 4]      # ter, sex
-    return [3]             # só qui (total 3 treinos/semana)
+def _spread_pick(days, k):
+    """Escolhe k dias bem espaçados de uma lista ordenada."""
+    if k >= len(days):
+        return list(days)
+    if k <= 0:
+        return []
+    step = len(days) / k
+    return [days[int(i * step)] for i in range(k)]
+
+
+def _circ_gap(a, b):
+    """Distância circular (na semana) entre dois dias."""
+    diff = abs(a - b)
+    return min(diff, 7 - diff)
+
+
+def weekly_schedule(available_days, sessions, long_day=6):
+    """
+    Monta a agenda da semana a partir dos DIAS DISPONÍVEIS do atleta, garantindo
+    o dia do longão e ESPAÇANDO os treinos-chave (sem dois pesados colados quando
+    possível). Retorna lista ordenada de (weekday, role) — role ∈ {long, quality, easy}.
+    """
+    days = sorted({d for d in (available_days or []) if 0 <= d <= 6})
+    if not days:
+        days = [1, 2, 3, 4, 5, 6]  # padrão: ter→dom
+    sessions = sessions or len(days)
+    floor = 3 if len(days) >= 3 else len(days)
+    sessions = min(max(sessions, floor), len(days))
+
+    long_d = long_day if long_day in days else max(days)
+    others = [d for d in days if d != long_d]
+    chosen_others = _spread_pick(others, sessions - 1)
+    quality_d = (
+        max(chosen_others, key=lambda d: _circ_gap(d, long_d)) if chosen_others else None
+    )
+
+    roles = [(long_d, "long")]
+    for d in chosen_others:
+        roles.append((d, "quality" if d == quality_d else "easy"))
+    return sorted(roles)
+
+
+def hard_days_adjacent(schedule):
+    """True se dois treinos-chave (long/quality) caem em dias consecutivos."""
+    hard = sorted(wd for wd, role in schedule if role in ("long", "quality"))
+    if any(b - a == 1 for a, b in zip(hard, hard[1:])):
+        return True
+    return len(hard) >= 2 and (hard[0] + 7 - hard[-1]) == 1  # domingo→segunda
 
 
 def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
-               runs_per_week=None, long_cap_km=None):
-    """Distribui o volume da semana em treinos diários (lista de dicts)."""
+               schedule=None, long_cap_km=None):
+    """Distribui o volume da semana nos dias da agenda (schedule)."""
     vol = week["volume_km"]
     out = []
+    sched = schedule or weekly_schedule([1, 2, 3, 4, 5, 6], preset["runs"], 6)
 
-    # Semana da prova: rodagens leves + a prova no dia certo.
+    # Semana da prova: rodagens leves nos dias disponíveis + a prova no dia certo.
     if week["is_race_week"] and race_date is not None:
+        pre_easy = [wd for wd, _ in sched][:2]
         for wd in range(7):
             day = monday + timedelta(days=wd)
             if day == race_date:
@@ -198,7 +241,7 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
                     "target_distance_m": goal_distance_m,
                     **_pace_kw(paces, "race"), "structure": [],
                 })
-            elif day < race_date and wd in (1, 3):  # 2 rodagens leves pré-prova
+            elif day < race_date and wd in pre_easy:
                 out.append({
                     "date": day, "weekday": wd, "workout_type": "easy",
                     "title": "Rodagem leve", "description": "Solto, só para ativar.",
@@ -206,25 +249,23 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
                 })
         return out
 
-    runs = runs_per_week or preset["runs"]
+    long_days = [wd for wd, role in sched if role == "long"]
+    quality_days = [wd for wd, role in sched if role == "quality"]
+    easy_days = [wd for wd, role in sched if role == "easy"]
     long_km = round(min(vol * 0.35, long_cap_km or preset["long_cap_km"]), 1)
     quali_km = round(vol * 0.22, 1)
-    easy_days = _easy_days(runs)
     easy_total = max(vol - long_km - quali_km, 0)
     easy_each = round(easy_total / len(easy_days), 1) if easy_days else 0
 
-    # Longão (domingo)
-    out.append({
-        "date": monday + timedelta(days=6), "weekday": 6, "workout_type": "long",
-        "title": f"Longão {long_km:.0f} km",
-        "description": "Ritmo confortável e constante; construa resistência aeróbica.",
-        "target_distance_m": long_km * 1000, **_pace_kw(paces, "long"), "structure": [],
-    })
-
-    # Sessão-chave (quarta)
-    out.append(_quality_session(monday + timedelta(days=2), week["phase"], paces, preset, quali_km))
-
-    # Rodagens fáceis
+    for wd in long_days:
+        out.append({
+            "date": monday + timedelta(days=wd), "weekday": wd, "workout_type": "long",
+            "title": f"Longão {long_km:.0f} km",
+            "description": "Ritmo confortável e constante; construa resistência aeróbica.",
+            "target_distance_m": long_km * 1000, **_pace_kw(paces, "long"), "structure": [],
+        })
+    for wd in quality_days:
+        out.append(_quality_session(monday + timedelta(days=wd), week["phase"], paces, preset, quali_km))
     for wd in easy_days:
         out.append({
             "date": monday + timedelta(days=wd), "weekday": wd, "workout_type": "easy",
@@ -232,6 +273,7 @@ def build_week(monday, week, paces, preset, goal_distance_m, race_date=None,
             "description": "Conversável; base aeróbica e recuperação ativa.",
             "target_distance_m": easy_each * 1000, **_pace_kw(paces, "easy"), "structure": [],
         })
+    out.sort(key=lambda w: w["weekday"])
     return out
 
 
@@ -271,12 +313,56 @@ def _quality_session(date, phase, paces, preset, quali_km):
     }
 
 
-def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None, goal_time_s=None):
+def _safety_review(anamnese, profile, schedule, n, preset, goal_distance_m):
+    """Avisos clínicos (blindagem) + flag conservadora antes de gerar o plano."""
+    warnings = []
+    conservative = False
+    if anamnese:
+        if anamnese.has_pain_now:
+            conservative = True
+            onde = f" ({anamnese.pain_where})" if anamnese.pain_where else ""
+            warnings.append(
+                f"Você relatou DOR no momento{onde}. Procure avaliação de um profissional "
+                "antes de cargas altas — o plano foi gerado em versão conservadora."
+            )
+        if (anamnese.injury_history or "").strip():
+            warnings.append(
+                "Histórico de lesão informado: progressão mais cautelosa; pare ao "
+                "primeiro sinal de dor e priorize fortalecimento."
+            )
+    if profile:
+        if profile.get("acwr_zone") in ("risco", "atencao"):
+            warnings.append(
+                "Sua carga recente já está elevada (ACWR) — as primeiras semanas "
+                "seguram o volume de propósito."
+            )
+        if profile.get("confidence") == "low":
+            warnings.append(
+                "Pouco histórico disponível: plano conservador, que se ajusta conforme "
+                "você registra treinos."
+            )
+    if hard_days_adjacent(schedule):
+        warnings.append(
+            "Seus dias disponíveis deixam treinos fortes em sequência — evite intensidade "
+            "em dois dias seguidos; deixe um deles bem leve."
+        )
+    min_weeks = {5000: 4, 10000: 6, 21097: 8, 42195: 12}.get(goal_distance_m, 6)
+    if n < min_weeks:
+        warnings.append(
+            f"Prazo curto para {preset['label']} ({n} sem; o ideal seria ≥ {min_weeks}). "
+            "Priorize chegar inteiro à prova, não bater tempo."
+        )
+    return warnings, conservative
+
+
+def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None,
+                  goal_time_s=None, anamnese=None):
     """
     Monta a especificação completa de um plano (sem gravar no banco).
 
-    Retorna dict: meta (base/pico/pace/confiança) + weeks (resumo) +
-    workouts (lista achatada pronta para materializar).
+    Usa o HISTÓRICO (FitnessProfile) e a ANAMNESE (dias disponíveis, lesões) para
+    montar um plano realista e seguro, com avisos clínicos (blindagem).
+    Retorna dict: meta + weeks (resumo) + workouts (lista achatada).
     """
     today = start_date or timezone.localdate()
     preset = closest_preset(goal_distance_m)
@@ -315,13 +401,33 @@ def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None, 
         or training_paces(goal_pace, preset)
     )
 
+    # --- Agenda: dias disponíveis (anamnese > histórico > padrão) + espaçamento ---
+    if anamnese and anamnese.available_days:
+        avail = anamnese.available_days
+        sessions = anamnese.sessions_per_week or runs_per_week
+        long_day = anamnese.preferred_long_day
+    else:
+        avail = fitness.infer_training_days(activities)
+        sessions = runs_per_week
+        long_day = fitness.infer_long_day(activities)
+    sessions = min(sessions or runs_per_week, preset["runs"])
+    schedule = weekly_schedule(avail, sessions, long_day)
+    runs_per_week = len(schedule)
+
+    # --- Blindagem clínica: avisos + versão conservadora quando há risco ---
+    warnings, conservative = _safety_review(
+        anamnese, profile, schedule, n, preset, goal_distance_m
+    )
+    if conservative:
+        peak = round(max(peak * 0.85, base * 1.05), 1)
+
     weeks = _weekly_volumes(base, peak, n, taper_weeks)
     workouts = []
     for i, week in enumerate(weeks):
         monday = first_monday + timedelta(weeks=i)
         day_workouts = build_week(
             monday, week, paces, preset, goal_distance_m, race_date=goal_race_date,
-            runs_per_week=runs_per_week, long_cap_km=long_cap_km,
+            schedule=schedule, long_cap_km=long_cap_km,
         )
         for w in day_workouts:
             w["week_no"] = week["week_no"]
@@ -338,12 +444,16 @@ def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None, 
             "peak_km": round(peak, 1),
             "runs_per_week": runs_per_week,
             "long_cap_km": round(long_cap_km, 1),
+            "training_days": weekday_labels([wd for wd, _ in schedule]),
             "goal_pace_s": round(goal_pace),
             "goal_pace_str": metrics.format_pace(goal_pace),
             "goal_time_s": goal_time_s,
             "confident": confident,
             "confidence": confidence,
             "from_history": bool(profile),
+            "from_anamnese": bool(anamnese),
+            "safety_warnings": warnings,
+            "conservative": conservative,
             "profile": profile,
             "start_date": first_monday,
         },
@@ -372,6 +482,7 @@ def materialize_plan(athlete, spec, created_by=None, source=PlannedWorkout.SOURC
         start_date=meta["start_date"], weekly_base_km=meta["base_km"],
         peak_weekly_km=meta["peak_km"], generated_by=generated_by,
         status=TrainingPlan.STATUS_ACTIVE,
+        notes="\n".join(meta.get("safety_warnings", [])),
     )
     objs = []
     for w in spec["workouts"]:
