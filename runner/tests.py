@@ -837,6 +837,15 @@ class AIProviderTests(TestCase):
                 self.settings(AI_PROVIDER="rules"):
             self.assertIsNone(ai.provider())
 
+    def test_gemini_request_without_key(self):
+        """Sem chave, gemini_request devolve (None, motivo) sem levantar exceção."""
+        from runner.services import ai
+
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+            text, debug = ai.gemini_request("sys", "oi", max_tokens=10)
+            self.assertIsNone(text)
+            self.assertIn("GEMINI_API_KEY", debug)
+
 
 class PWATests(TestCase):
     """PWA: service worker em escopo raiz + banner de instalação."""

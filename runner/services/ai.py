@@ -69,7 +69,14 @@ def is_enabled():
     return provider() is not None
 
 
-def _complete_gemini(system, user_text, max_tokens, temperature):
+def gemini_request(system, user_text, max_tokens=500, temperature=None):
+    """
+    Chamada crua ao Gemini. Retorna (text, debug) — text=None em falha, com
+    `debug` legível (status/motivo) para diagnóstico. NÃO levanta exceção.
+    """
+    key = gemini_key()
+    if not key:
+        return None, "sem GEMINI_API_KEY"
     model = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
@@ -78,16 +85,34 @@ def _complete_gemini(system, user_text, max_tokens, temperature):
     }
     if temperature is not None:
         body["generationConfig"]["temperature"] = temperature
-    resp = requests.post(
-        GEMINI_ENDPOINT.format(model=model),
-        params={"key": gemini_key()},
-        json=body,
-        timeout=30,
-    )
-    resp.raise_for_status()
+    try:
+        resp = requests.post(
+            GEMINI_ENDPOINT.format(model=model),
+            params={"key": key}, json=body, timeout=30,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return None, f"erro de rede: {exc!r}"
+    if resp.status_code == 429:
+        return None, f"HTTP 429 cota/limite (RESOURCE_EXHAUSTED): {resp.text[:400]}"
+    if resp.status_code != 200:
+        return None, f"HTTP {resp.status_code}: {resp.text[:400]}"
     data = resp.json()
-    parts = (data.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
-    return "".join(p.get("text", "") for p in parts).strip()
+    cands = data.get("candidates") or []
+    if not cands:
+        fb = data.get("promptFeedback")
+        return None, f"sem candidates (promptFeedback={fb})"
+    parts = cands[0].get("content", {}).get("parts", [])
+    text = "".join(p.get("text", "") for p in parts).strip()
+    if not text:
+        return None, f"resposta vazia (finishReason={cands[0].get('finishReason')})"
+    return text, "ok"
+
+
+def _complete_gemini(system, user_text, max_tokens, temperature):
+    text, debug = gemini_request(system, user_text, max_tokens, temperature)
+    if text is None:
+        logger.error("Gemini falhou: %s", debug)
+    return text
 
 
 def _complete_claude(system, user_text, max_tokens, temperature):

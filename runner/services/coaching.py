@@ -276,7 +276,11 @@ def answer_question(athlete, question):
         f"{json.dumps(ctx, ensure_ascii=False)}",
         max_tokens=600,
     )
-    return text or "Não consegui responder agora — tente reformular a pergunta."
+    return text or (
+        "O treinador IA está temporariamente indisponível (limite de uso da IA ou "
+        "instabilidade). Tente de novo em alguns minutos — seus dados de pace, carga "
+        "(ACWR) e projeções continuam no painel."
+    )
 
 
 SYSTEM_COPILOT = (
