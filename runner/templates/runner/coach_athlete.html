@@ -74,6 +74,7 @@
     <div class="card-head"><h3>{{ plan.goal_label }} — {{ plan.goal_race_date|date:"d/m/Y" }}</h3>
       <span class="pill pill-baixa">{{ plan.weeks_to_race }} sem</span></div>
     <p class="card-sub">Base {{ plan.weekly_base_km }} km/sem · pico {{ plan.peak_weekly_km }} km/sem · gerado por {{ plan.get_generated_by_display|default:plan.generated_by }}.</p>
+    <a class="btn btn-sm" href="{% url 'plan_detail' plan.id %}" style="margin:8px 0">Ver / editar plano completo →</a>
     <p class="card-sub">Recriar o plano abaixo substitui os treinos futuros ainda não realizados.</p>
   {% endif %}
   <form action="{% url 'create_plan' athlete.id %}" method="post" class="form-grid" style="margin-top:8px">

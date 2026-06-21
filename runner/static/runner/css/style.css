@@ -343,6 +343,22 @@ textarea{resize:vertical;min-height:70px}
 .note-soft{font-size:13px;color:var(--warn);background:rgba(251,191,36,.08);
   border:1px solid rgba(251,191,36,.25);border-radius:var(--r-sm);padding:10px 12px;margin-top:10px}
 
+/* ---------- Plano detalhado: blocos de semana + ações de treino ---------- */
+.week-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin:12px 0}
+.week-current{border-color:rgba(255,90,54,.42);box-shadow:0 0 0 1px rgba(255,90,54,.18)}
+.week-past{opacity:.72}
+.week-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.week-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:15px}
+.wo-actions{display:flex;align-items:center;gap:6px;flex:none}
+.icon-act{display:grid;place-items:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface);color:var(--muted);cursor:pointer;font-size:14px;font:inherit;transition:.15s}
+.icon-act:hover{border-color:var(--brand);color:var(--text)}
+.icon-danger:hover{border-color:var(--bad);color:var(--bad)}
+.add-details{margin:14px 0}
+.add-details > summary{cursor:pointer;list-style:none;width:fit-content}
+.add-details > summary::-webkit-details-marker{display:none}
+.add-details[open] > summary{margin-bottom:0}
+
 /* ---------- Zonas de pace (perfil de aptidão) ---------- */
 .zones{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
 .zone{font-size:13px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);

@@ -1,0 +1,112 @@
+{% extends "runner/base.html" %}
+{% block title %}{{ plan.goal_label }} · Plano · ZayaRun{% endblock %}
+{% block content %}
+
+<p style="margin-top:4px">
+  {% if is_coach_view %}
+    <a class="link-btn" href="{% url 'coach_athlete' plan.athlete.id %}">← Voltar para {{ athlete_name }}</a>
+  {% else %}
+    <a class="link-btn" href="{% url 'my_plan' %}">← Voltar ao plano</a>
+  {% endif %}
+</p>
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Plano de prova{% if is_coach_view %} · {{ athlete_name }}{% endif %}</p>
+    <h1>{{ plan.goal_label }}</h1>
+  </div>
+  <div class="page-actions">
+    <form action="{% url 'delete_plan' plan.id %}" method="post" class="inline"
+          onsubmit="return confirm('Excluir este plano? Os treinos futuros serão removidos; os já realizados ficam no histórico.');">
+      {% csrf_token %}
+      <button class="btn btn-sm btn-ghost" type="submit">🗑 Excluir plano</button>
+    </form>
+  </div>
+</div>
+
+<!-- Resumo -->
+<div class="plan-summary">
+  <article class="kpi"><span class="kpi-label">Prova</span>
+    <span class="kpi-value" style="font-size:18px">{{ plan.goal_race_date|date:"d/m/Y" }}</span></article>
+  <article class="kpi"><span class="kpi-label">Faltam</span>
+    <span class="kpi-value">{{ plan.weeks_to_race }}<small>sem</small></span></article>
+  <article class="kpi"><span class="kpi-label">Base → Pico</span>
+    <span class="kpi-value" style="font-size:18px">{{ plan.weekly_base_km|floatformat:0 }}→{{ plan.peak_weekly_km|floatformat:0 }}<small>km</small></span></article>
+  {% if adherence_pct is not None %}
+  <article class="kpi"><span class="kpi-label">Aderência</span>
+    <span class="kpi-value">{{ adherence_pct }}<small>%</small></span></article>
+  {% endif %}
+</div>
+<p class="card-sub" style="margin:0 4px 6px">
+  {{ weeks|length }} semanas · gerado por {{ plan.get_generated_by_display|default:plan.generated_by }} ·
+  {{ done_total }}/{{ count_total }} treinos realizados. Toque em ✎ para editar ou 🗑 para remover um treino.
+</p>
+
+<!-- Macrociclo: semana a semana -->
+{% for week in weeks %}
+  <div class="week-block {% if week.is_current %}week-current{% endif %} {% if week.is_past %}week-past{% endif %}">
+    <div class="week-head">
+      <div class="week-title">
+        <b>Semana {{ week.index }}</b>
+        <span class="muted small">{{ week.monday|date:"d/m" }}–{{ week.sunday|date:"d/m" }}</span>
+        {% if week.is_current %}<span class="pill pill-baixa">Atual</span>{% endif %}
+      </div>
+      <span class="muted small">{{ week.total_km }} km · {{ week.done }}/{{ week.count }}</span>
+    </div>
+    <div class="wk-workouts">
+      {% for w in week.workouts %}
+        <div class="wo wt-{{ w.workout_type }}">
+          <div class="wo-body">
+            <span class="wo-title">{{ w.title }}
+              {% if w.status == 'completed' %}<span class="wo-check" title="Realizado">✓</span>
+              {% elif w.status == 'missed' %}<span class="wo-miss" title="Perdido">✕</span>{% endif %}
+            </span>
+            <span class="wo-meta">
+              {{ w.date|date:"D d/m" }}
+              {% if w.target_distance_km %} · {{ w.target_distance_km }} km{% endif %}
+              {% if w.target_pace_str %} · {{ w.target_pace_str }}/km{% endif %}
+            </span>
+            {% if w.description %}<span class="wo-desc">{{ w.description }}</span>{% endif %}
+            {% if w.adherence %}<span class="pill pill-{{ w.adherence.zone }} wo-adh">{{ w.adherence.status }} · {{ w.adherence.score }}%</span>{% endif %}
+          </div>
+          <div class="wo-actions">
+            <a class="icon-act" href="{% url 'edit_workout' w.id %}" title="Editar">✎</a>
+            <form action="{% url 'delete_workout' w.id %}" method="post" class="inline"
+                  onsubmit="return confirm('Remover este treino?');">
+              {% csrf_token %}
+              <button class="icon-act icon-danger" type="submit" title="Remover">🗑</button>
+            </form>
+          </div>
+        </div>
+      {% empty %}
+        <span class="wk-rest">descanso</span>
+      {% endfor %}
+    </div>
+  </div>
+{% empty %}
+  <div class="card"><p class="muted" style="margin:0">Este plano não tem treinos. Adicione um abaixo.</p></div>
+{% endfor %}
+
+<!-- Adicionar treino -->
+<details class="add-details">
+  <summary class="btn btn-sm" style="display:inline-flex">+ Adicionar treino</summary>
+  <div class="card" style="margin-top:10px">
+    <form action="{% url 'add_workout_to_plan' plan.id %}" method="post" class="form-grid">
+      {% csrf_token %}
+      <label class="field" style="margin:0"><span>Data</span>
+        <input type="date" name="date" value="{{ today|date:'Y-m-d' }}" required></label>
+      <label class="field" style="margin:0"><span>Tipo</span>
+        <select name="workout_type">{% for k, l in workout_types %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></label>
+      <label class="field" style="margin:0"><span>Distância (km)</span>
+        <input type="number" name="distance_km" step="0.1" min="0"></label>
+      <label class="field" style="margin:0"><span>Pace (m:ss/km)</span>
+        <input type="text" name="pace" placeholder="Ex.: 5:30"></label>
+      <label class="field field-full" style="margin:0"><span>Título / instruções</span>
+        <input type="text" name="title" placeholder="Título"></label>
+      <label class="field field-full" style="margin:0"><span>Instruções</span>
+        <textarea name="description"></textarea></label>
+      <div class="field-full"><button class="btn btn-primary" type="submit">Adicionar ao plano</button></div>
+    </form>
+  </div>
+</details>
+{% endblock %}

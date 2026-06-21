@@ -1,0 +1,49 @@
+{% extends "runner/base.html" %}
+{% block title %}Editar treino · ZayaRun{% endblock %}
+{% block content %}
+<p style="margin-top:4px"><a class="link-btn" href="{{ back_url }}">← Voltar</a></p>
+
+<div class="page-head">
+  <div><p class="eyebrow">Editar treino{% if athlete_name %} · {{ athlete_name }}{% endif %}</p>
+    <h1>{{ workout.title }}</h1></div>
+</div>
+
+<div class="card">
+  <form action="{% url 'edit_workout' workout.id %}" method="post" class="form-grid">
+    {% csrf_token %}
+    <label class="field" style="margin:0"><span>Data</span>
+      <input type="date" name="date" value="{{ workout.date|date:'Y-m-d' }}" required></label>
+    <label class="field" style="margin:0"><span>Tipo</span>
+      <select name="workout_type">
+        {% for k, l in workout_types %}
+          <option value="{{ k }}" {% if k == workout.workout_type %}selected{% endif %}>{{ l }}</option>
+        {% endfor %}
+      </select></label>
+    <label class="field" style="margin:0"><span>Distância (km)</span>
+      <input type="number" name="distance_km" step="0.1" min="0"
+             value="{% if workout.target_distance_km %}{{ workout.target_distance_km }}{% endif %}"></label>
+    <label class="field" style="margin:0"><span>Pace-alvo (m:ss/km)</span>
+      <input type="text" name="pace" placeholder="Ex.: 5:30"
+             value="{% if workout.target_pace_str %}{{ workout.target_pace_str }}{% endif %}"></label>
+    <label class="field" style="margin:0"><span>Situação</span>
+      <select name="status">
+        {% for k, l in status_choices %}
+          <option value="{{ k }}" {% if k == workout.status %}selected{% endif %}>{{ l }}</option>
+        {% endfor %}
+      </select></label>
+    <label class="field field-full" style="margin:0"><span>Título</span>
+      <input type="text" name="title" value="{{ workout.title }}"></label>
+    <label class="field field-full" style="margin:0"><span>Instruções</span>
+      <textarea name="description">{{ workout.description }}</textarea></label>
+    <div class="field-full" style="display:flex;gap:10px;align-items:center">
+      <button class="btn btn-primary" type="submit" style="flex:1">Salvar treino</button>
+    </div>
+  </form>
+
+  <form action="{% url 'delete_workout' workout.id %}" method="post" style="margin-top:12px"
+        onsubmit="return confirm('Remover este treino?');">
+    {% csrf_token %}
+    <button class="btn btn-sm btn-ghost" type="submit">🗑 Remover treino</button>
+  </form>
+</div>
+{% endblock %}

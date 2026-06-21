@@ -58,27 +58,11 @@
         <span class="kpi-value" style="font-size:18px">definida</span></article>
       {% endif %}
     </div>
+    <a class="btn btn-primary" href="{% url 'plan_detail' plan.id %}" style="margin-top:6px">Ver plano completo & editar →</a>
   </div>
 
   <p class="section-label">Esta semana</p>
   {% include "runner/_planned_week.html" with week=week %}
-
-  <p class="section-label">Próximos treinos</p>
-  <div class="card">
-    <ul class="act-list">
-      {% for w in upcoming %}
-        <li><span class="act-row">
-          <span class="act-ico wt-{{ w.workout_type }}" style="background:rgba(91,141,239,.12)">{{ w.date|date:"d" }}</span>
-          <span class="act-body">
-            <span class="act-name">{{ w.title }}</span>
-            <span class="act-meta">{{ w.date|date:"d/m" }}{% if w.target_distance_km %} · {{ w.target_distance_km }} km{% endif %}{% if w.target_pace_str %} · {{ w.target_pace_str }}/km{% endif %}</span>
-          </span>
-        </span></li>
-      {% empty %}
-        <li><p class="muted" style="margin:0">Sem treinos futuros. Recrie o plano para gerar mais semanas.</p></li>
-      {% endfor %}
-    </ul>
-  </div>
 {% else %}
   <div class="card">
     <p class="muted" style="margin-top:0">Você ainda não tem um plano. Escolha sua prova-alvo e o ZayaRun monta o

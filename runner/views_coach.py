@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -267,6 +268,7 @@ def create_plan(request, athlete_id):
                                  source=PlannedWorkout.SOURCE_COACH)
     if plan:
         messages.success(request, "Plano de prova criado e treinos prescritos.")
+        return redirect("plan_detail", plan_id=plan.id)
     return redirect("coach_athlete", athlete_id=athlete_id)
 
 
@@ -319,6 +321,7 @@ def create_my_plan(request):
                                  source=PlannedWorkout.SOURCE_SELF)
     if plan:
         messages.success(request, "Seu plano de prova foi criado!")
+        return redirect("plan_detail", plan_id=plan.id)
     return redirect("my_plan")
 
 
@@ -380,3 +383,167 @@ def copilot(request):
             "Estou pronto para uma meia maratona?",
         ],
     })
+
+
+# --------------------------------------------------------------------------
+# CRUD do plano: ver (macrociclo), editar treino, excluir treino, excluir plano
+# --------------------------------------------------------------------------
+def _can_manage(user, athlete):
+    """O usuário pode gerir este atleta? (é ele mesmo ou seu treinador ativo)."""
+    if user == athlete:
+        return True
+    return CoachAthlete.objects.filter(
+        coach=user, athlete=athlete, status=CoachAthlete.STATUS_ACTIVE
+    ).exists()
+
+
+def _back_to(request, workout):
+    if workout.plan_id:
+        return reverse("plan_detail", args=[workout.plan_id])
+    if request.user == workout.athlete:
+        return reverse("my_plan")
+    return reverse("coach_athlete", args=[workout.athlete_id])
+
+
+def _plan_weeks(plan):
+    """Agrupa os treinos do plano por semana (segunda→domingo), com aderência."""
+    workouts = list(plan.workouts.select_related("matched_activity").order_by("date"))
+    for w in workouts:
+        w.adherence = metrics.adherence(w, w.matched_activity) if w.matched_activity else None
+    today = timezone.localdate()
+    by_monday = {}
+    for w in workouts:
+        monday = w.date - timedelta(days=w.date.weekday())
+        by_monday.setdefault(monday, []).append(w)
+    weeks = []
+    for index, monday in enumerate(sorted(by_monday), start=1):
+        ws = by_monday[monday]
+        sunday = monday + timedelta(days=6)
+        active = [w for w in ws if w.workout_type != "rest"]
+        weeks.append({
+            "index": index,
+            "monday": monday,
+            "sunday": sunday,
+            "workouts": ws,
+            "total_km": round(sum((w.target_distance_m or 0) for w in ws) / 1000.0, 1),
+            "done": sum(1 for w in ws if w.status == PlannedWorkout.STATUS_COMPLETED),
+            "count": len(active),
+            "is_current": monday <= today <= sunday,
+            "is_past": sunday < today,
+        })
+    return weeks
+
+
+@login_required
+def plan_detail(request, plan_id):
+    plan = get_object_or_404(TrainingPlan, pk=plan_id)
+    if not _can_manage(request.user, plan.athlete):
+        raise Http404("Plano não encontrado.")
+    weeks = _plan_weeks(plan)
+    done_total = sum(w["done"] for w in weeks)
+    count_total = sum(w["count"] for w in weeks)
+    return render(request, "runner/plan_detail.html", {
+        "plan": plan,
+        "weeks": weeks,
+        "is_coach_view": request.user != plan.athlete,
+        "athlete_name": coaching._athlete_name(plan.athlete),
+        "workout_types": WORKOUT_TYPES,
+        "done_total": done_total,
+        "count_total": count_total,
+        "adherence_pct": round(done_total / count_total * 100) if count_total else None,
+        "today": timezone.localdate(),
+    })
+
+
+@login_required
+@require_POST
+def delete_plan(request, plan_id):
+    plan = get_object_or_404(TrainingPlan, pk=plan_id)
+    athlete = plan.athlete
+    if not _can_manage(request.user, athlete):
+        raise Http404("Plano não encontrado.")
+    # Remove treinos futuros ainda não realizados; mantém o histórico (plan→null).
+    PlannedWorkout.objects.filter(
+        plan=plan, date__gte=timezone.localdate(), status=PlannedWorkout.STATUS_PLANNED
+    ).delete()
+    plan.delete()
+    messages.info(request, "Plano excluído. Os treinos já realizados foram mantidos no histórico.")
+    if request.user == athlete:
+        return redirect("my_plan")
+    return redirect("coach_athlete", athlete_id=athlete.id)
+
+
+@login_required
+def edit_workout(request, planned_id):
+    workout = get_object_or_404(PlannedWorkout, pk=planned_id)
+    if not _can_manage(request.user, workout.athlete):
+        raise Http404("Treino não encontrado.")
+    if request.method == "POST":
+        workout.date = _parse_date(request.POST.get("date")) or workout.date
+        wtype = request.POST.get("workout_type", workout.workout_type)
+        workout.workout_type = wtype if wtype in dict(WORKOUT_TYPES) else workout.workout_type
+        workout.title = request.POST.get("title", "").strip() or dict(WORKOUT_TYPES)[workout.workout_type]
+        workout.description = request.POST.get("description", "").strip()
+        dist_km = _to_float(request.POST.get("distance_km"))
+        workout.target_distance_m = dist_km * 1000 if dist_km else None
+        pace_s = _parse_pace(request.POST.get("pace", ""))
+        if pace_s:
+            workout.target_pace_low_s = pace_s
+            workout.target_pace_high_s = pace_s
+        status = request.POST.get("status")
+        if status in dict(PlannedWorkout.STATUS_CHOICES):
+            workout.status = status
+        workout.save()
+        messages.success(request, "Treino atualizado.")
+        return redirect(_back_to(request, workout))
+    return render(request, "runner/edit_workout.html", {
+        "workout": workout,
+        "workout_types": WORKOUT_TYPES,
+        "status_choices": PlannedWorkout.STATUS_CHOICES,
+        "athlete_name": coaching._athlete_name(workout.athlete),
+        "back_url": _back_to(request, workout),
+    })
+
+
+@login_required
+@require_POST
+def delete_workout(request, planned_id):
+    workout = get_object_or_404(PlannedWorkout, pk=planned_id)
+    if not _can_manage(request.user, workout.athlete):
+        raise Http404("Treino não encontrado.")
+    back = _back_to(request, workout)
+    workout.delete()
+    messages.info(request, "Treino removido.")
+    return redirect(back)
+
+
+@login_required
+@require_POST
+def add_workout_to_plan(request, plan_id):
+    plan = get_object_or_404(TrainingPlan, pk=plan_id)
+    if not _can_manage(request.user, plan.athlete):
+        raise Http404("Plano não encontrado.")
+    day = _parse_date(request.POST.get("date"))
+    if not day:
+        messages.error(request, "Informe uma data válida.")
+        return redirect("plan_detail", plan_id=plan_id)
+    wtype = request.POST.get("workout_type", "easy")
+    if wtype not in dict(WORKOUT_TYPES):
+        wtype = "easy"
+    pace_s = _parse_pace(request.POST.get("pace", ""))
+    dist_km = _to_float(request.POST.get("distance_km"))
+    PlannedWorkout.objects.create(
+        athlete=plan.athlete,
+        created_by=request.user,
+        plan=plan,
+        source=PlannedWorkout.SOURCE_COACH if request.user != plan.athlete else PlannedWorkout.SOURCE_SELF,
+        date=day,
+        workout_type=wtype,
+        title=request.POST.get("title", "").strip() or dict(WORKOUT_TYPES)[wtype],
+        description=request.POST.get("description", "").strip(),
+        target_distance_m=dist_km * 1000 if dist_km else None,
+        target_pace_low_s=pace_s,
+        target_pace_high_s=pace_s,
+    )
+    messages.success(request, "Treino adicionado ao plano.")
+    return redirect("plan_detail", plan_id=plan_id)

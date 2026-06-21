@@ -495,6 +495,49 @@ class ViewSmokeTests(TestCase):
         self.assertFalse(Activity.objects.filter(user=self.user).exists())
         self.assertFalse(FitnessProfile.objects.filter(athlete=self.user).exists())
 
+    def test_plan_crud(self):
+        from runner.models import TrainingPlan
+        from runner.services import plans
+
+        race = timezone.localdate() + timedelta(days=7 * 6)
+        spec = plans.generate_plan([], 10_000, race)
+        plan = plans.materialize_plan(self.user, spec, created_by=self.user)
+
+        # Ver o plano completo
+        self.assertEqual(
+            self.client.get(reverse("plan_detail", args=[plan.id])).status_code, 200
+        )
+        w = PlannedWorkout.objects.filter(plan=plan).first()
+
+        # Editar um treino
+        self.client.post(reverse("edit_workout", args=[w.id]), {
+            "date": w.date.isoformat(), "workout_type": "tempo", "title": "Editado",
+            "distance_km": "8", "pace": "4:50", "status": "completed",
+        })
+        w.refresh_from_db()
+        self.assertEqual(w.title, "Editado")
+        self.assertEqual(w.workout_type, "tempo")
+        self.assertEqual(w.status, "completed")
+
+        # Adicionar e remover um treino
+        self.client.post(reverse("add_workout_to_plan", args=[plan.id]),
+                         {"date": timezone.localdate().isoformat(), "workout_type": "easy"})
+        wid = w.id
+        self.client.post(reverse("delete_workout", args=[wid]))
+        self.assertFalse(PlannedWorkout.objects.filter(pk=wid).exists())
+
+        # Excluir o plano
+        self.client.post(reverse("delete_plan", args=[plan.id]))
+        self.assertFalse(TrainingPlan.objects.filter(pk=plan.id).exists())
+
+    def test_cannot_manage_others_workout(self):
+        other = User.objects.create_user("intruso", password="x")
+        w = PlannedWorkout.objects.create(
+            athlete=other, date=timezone.localdate(), workout_type="easy"
+        )
+        self.assertEqual(self.client.get(reverse("edit_workout", args=[w.id])).status_code, 404)
+        self.assertEqual(self.client.post(reverse("delete_workout", args=[w.id])).status_code, 404)
+
 
 @override_settings(STORAGES={
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
