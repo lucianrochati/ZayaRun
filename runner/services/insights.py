@@ -107,6 +107,38 @@ def _split_fade(activity):
     return metrics.split_fade(activity)
 
 
+def build_copilot_context(activities, athlete=None, days=120, max_runs=80):
+    """
+    Contexto RICO para o copiloto: alem do resumo, inclui a LISTA de corridas
+    recentes (data, distancia, pace, duracao) para responder com dados REAIS
+    sobre datas, distancias especificas (ex.: 5 km x 8 km) e periodos —
+    sem reaproveitar numeros de outra distancia nem inventar.
+    """
+    base = build_context(activities, athlete=athlete)
+    if not base:
+        return None
+    now = timezone.now()
+    recent = sorted(
+        (a for a in metrics.only_runs(activities) if a.start_date >= now - timedelta(days=days)),
+        key=lambda a: a.start_date,
+        reverse=True,
+    )[:max_runs]
+    base["runs_window_days"] = days
+    base["runs_count"] = len(recent)
+    base["runs"] = [
+        {
+            "data": timezone.localtime(a.start_date).date().isoformat(),
+            "distancia_km": round(a.distance_km, 1),
+            "pace_km": a.pace_str,
+            "duracao_min": round(a.moving_time_s / 60.0) if a.moving_time_s else None,
+            "cadencia_spm": a.cadence_spm,
+            "nome": a.name or a.sport_type,
+        }
+        for a in recent
+    ]
+    return base
+
+
 # --------------------------------------------------------------------------
 # Orquestrador
 # --------------------------------------------------------------------------

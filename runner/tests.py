@@ -834,6 +834,29 @@ class AnamneseTests(TestCase):
         self.assertNotIn("Intervalado", " ".join(w["title"] for w in spec["workouts"]))
 
 
+class CopilotContextTests(TestCase):
+    """O copiloto recebe a LISTA real de corridas (datas/distância/pace)."""
+
+    def test_context_lists_real_runs_with_dates(self):
+        runs = [
+            make_run(5000, 1650, days_ago=3),    # 5 km
+            make_run(8000, 2760, days_ago=10),   # 8 km
+            make_run(5000, 1700, days_ago=17),   # 5 km
+            make_run(8000, 2800, days_ago=24),   # 8 km
+        ]
+        ctx = insights.build_copilot_context(runs)
+        self.assertEqual(ctx["runs_count"], 4)
+        first = ctx["runs"][0]
+        for key in ("data", "distancia_km", "pace_km"):
+            self.assertIn(key, first)
+        self.assertRegex(first["data"], r"^\d{4}-\d{2}-\d{2}$")          # data ISO
+        dists = sorted({round(r["distancia_km"]) for r in ctx["runs"]})
+        self.assertEqual(dists, [5, 8])    # 5 km e 8 km distinguíveis (não se misturam)
+
+    def test_context_none_without_runs(self):
+        self.assertIsNone(insights.build_copilot_context([]))
+
+
 class AIProviderTests(TestCase):
     """Resolução de provedor de IA (gratuitos Groq > Gemini > Claude > regras)."""
 

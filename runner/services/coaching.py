@@ -261,7 +261,7 @@ SYSTEM_FEEDBACK = (
 def answer_question(athlete, question):
     """Responde uma pergunta em linguagem natural sobre os dados do atleta."""
     activities = list(athlete.activities.all())
-    ctx = insights.build_context(activities, athlete=athlete)
+    ctx = insights.build_copilot_context(activities, athlete=athlete)
     if not ctx:
         return ("Ainda não há treinos suficientes para eu analisar. Conecte a "
                 "Strava e sincronize algumas corridas primeiro.")
@@ -274,7 +274,7 @@ def answer_question(athlete, question):
         SYSTEM_COPILOT,
         f"Pergunta do atleta: {question}\n\nDados do atleta (JSON):\n"
         f"{json.dumps(ctx, ensure_ascii=False)}",
-        max_tokens=600,
+        max_tokens=900,
     )
     return text or (
         "O treinador IA está temporariamente indisponível (limite de uso da IA ou "
@@ -290,8 +290,18 @@ SYSTEM_COPILOT = (
     "hábitos que afetam a corrida (sono, hidratação, alimentação no contexto do "
     "treino). Se a pergunta NÃO for sobre corrida/treino, RECUSE com gentileza em 1 "
     "frase e reconduza ao tema (ex.: 'Sou seu copiloto de corrida — posso te ajudar "
-    "com pace, carga, plano ou a próxima prova.'). Responda SOMENTE com base nos "
-    "dados fornecidos (JSON), em PT-BR, direto, no máximo 5 frases, sem markdown. "
-    "Nunca invente números que não estejam nos dados. Não dê diagnóstico médico: em "
-    "caso de dor ou lesão, oriente procurar um profissional de saúde."
+    "com pace, carga, plano ou a próxima prova.').\n"
+    "Os dados (JSON) trazem um resumo E uma lista `runs` com CADA corrida recente "
+    "(campos: data AAAA-MM-DD, distancia_km, pace_km, duracao_min, cadencia_spm, nome). "
+    "Para perguntas sobre DATAS, um PERÍODO ou uma DISTÂNCIA específica (ex.: 'meus "
+    "treinos de 5 km', 'corridas de 8 km nos últimos 2 meses'), FILTRE você mesmo a "
+    "lista `runs`: selecione as corridas cuja distancia_km fica próxima da pedida "
+    "(±0,7 km) e/ou dentro do período, e RESPONDA citando as DATAS e os PACES REAIS de "
+    "CADA corrida que se encaixa. NUNCA reutilize o pace/números de uma distância "
+    "diferente da perguntada. Se não houver corridas que se encaixem, diga isso "
+    "claramente (não invente). Quando listar várias corridas, use uma lista curta "
+    "(uma linha por corrida: data — distância — pace).\n"
+    "Responda em PT-BR, direto e objetivo, sem markdown pesado. Nunca invente números "
+    "que não estejam nos dados. Não dê diagnóstico médico: em caso de dor ou lesão, "
+    "oriente procurar um profissional de saúde."
 )
