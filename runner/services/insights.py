@@ -136,7 +136,126 @@ def build_copilot_context(activities, athlete=None, days=120, max_runs=80):
         }
         for a in recent
     ]
+    # Consciência: o que o atleta NORMALMENTE faz (baseline) + desvios do padrão.
+    from runner.services import fitness
+
+    profile = fitness.compute_profile(activities)
+    base["padrao"] = athlete_pattern(activities, profile=profile)
+    sinais = [s["text"] for s in behavioral_signals(activities, athlete=athlete, profile=profile)]
+    if sinais:
+        base["sinais_fora_do_padrao"] = sinais
     return base
+
+
+# --------------------------------------------------------------------------
+# Consciência: padrão do atleta (baseline aprendido) + desvios do comum
+# --------------------------------------------------------------------------
+def athlete_pattern(activities, profile=None):
+    """Hábitos típicos do atleta (o 'normal' dele), para a Zaya conhecer quem ela treina."""
+    from runner.models import weekday_labels
+    from runner.services import fitness
+
+    profile = profile or fitness.compute_profile(activities)
+    if not profile:
+        return None
+    days = fitness.infer_training_days(activities)
+    easy = profile.get("easy_pace_s")
+    return {
+        "dias_tipicos": weekday_labels(days) if days else None,
+        "sessoes_por_semana": profile["runs_per_week"],
+        "volume_semanal_tipico_km": profile["weekly_volume_km"],
+        "maior_longao_km": profile["longest_run_km"],
+        "pace_facil_habitual": metrics.format_pace(easy) if easy else None,
+        "nivel": profile["experience_level"],
+        "tendencia_volume": profile["volume_trend"],
+    }
+
+
+def _rpe_trend_signal(athlete):
+    """PSE médio recente subindo vs período anterior → fadiga acumulando."""
+    import statistics
+
+    from runner.models import WorkoutFeedback
+
+    today = timezone.localdate()
+    recent = [
+        f.rpe for f in WorkoutFeedback.objects.filter(athlete=athlete, date__gte=today - timedelta(days=14))
+        if f.rpe
+    ]
+    prior = [
+        f.rpe for f in WorkoutFeedback.objects.filter(
+            athlete=athlete, date__gte=today - timedelta(days=28), date__lt=today - timedelta(days=14)
+        ) if f.rpe
+    ]
+    if len(recent) >= 2 and len(prior) >= 2:
+        delta = statistics.mean(recent) - statistics.mean(prior)
+        if delta >= 1.5:
+            return [{
+                "kind": "pse_subindo", "level": "atencao",
+                "text": (f"Seu esforço percebido (PSE) subiu nas últimas semanas "
+                         f"(de ~{statistics.mean(prior):.0f} para ~{statistics.mean(recent):.0f}/10) "
+                         "— sinal de fadiga acumulando."),
+            }]
+    return []
+
+
+def behavioral_signals(activities, athlete=None, profile=None):
+    """
+    Sinais 'fora do comum': compara o comportamento RECENTE ao baseline do PRÓPRIO
+    atleta (FitnessProfile aprendido) e aponta desvios. Heurística transparente —
+    só o que dá para medir dos dados reais; nada inventado.
+    """
+    import statistics
+
+    from runner.services import fitness
+
+    runs = metrics.only_runs(activities)
+    if len(runs) < 5:
+        return []  # pouco histórico → sem 'normal' confiável para comparar
+    profile = profile or fitness.compute_profile(activities)
+    if not profile:
+        return []
+    now = timezone.now()
+    signals = []
+
+    # 1) Volume dos últimos 7 dias vs média semanal típica.
+    base_vol = profile.get("weekly_volume_km") or 0
+    last7 = sum(a.distance_m for a in runs if a.start_date >= now - timedelta(days=7)) / 1000.0
+    if base_vol > 0:
+        ratio = last7 / base_vol
+        if ratio < 0.6:
+            signals.append({"kind": "volume_baixo", "level": "atencao",
+                            "text": (f"Volume dos últimos 7 dias ({last7:.0f} km) está "
+                                     f"{round((1 - ratio) * 100)}% abaixo da sua média (~{base_vol:.0f} km/sem).")})
+        elif ratio > 1.5:
+            signals.append({"kind": "volume_alto", "level": "risco",
+                            "text": (f"Volume dos últimos 7 dias ({last7:.0f} km) está bem acima da sua "
+                                     f"média (~{base_vol:.0f} km/sem) — atenção à sobrecarga.")})
+
+    # 2) Dias parado vs intervalo típico entre corridas.
+    last = max(runs, key=lambda a: a.start_date)
+    days_since = (now - last.start_date).days
+    rpw = max(profile.get("runs_per_week") or 3, 1)
+    if days_since >= max(5, round(7 / rpw) * 2):
+        signals.append({"kind": "parado", "level": "atencao",
+                        "text": (f"Você está há {days_since} dias sem correr — acima do seu normal "
+                                 f"(costuma correr ~{rpw}x/semana).")})
+
+    # 3) Pace recente vs ritmo fácil habitual.
+    easy = profile.get("easy_pace_s")
+    recent = sorted((a for a in runs if a.distance_m >= 3000),
+                    key=lambda a: a.start_date, reverse=True)[:3]
+    if easy and len(recent) >= 2:
+        med = statistics.median(a.pace_seconds_per_km for a in recent)
+        if med > easy * 1.10:
+            signals.append({"kind": "pace_lento", "level": "atencao",
+                            "text": (f"Suas últimas corridas saíram ~{round((med / easy - 1) * 100)}% mais "
+                                     "lentas que seu ritmo fácil habitual — pode ser fadiga, calor ou dia ruim.")})
+
+    # 4) Tendência de PSE (precisa do atleta para ler os feedbacks).
+    if athlete is not None:
+        signals += _rpe_trend_signal(athlete)
+    return signals
 
 
 # --------------------------------------------------------------------------

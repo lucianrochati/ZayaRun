@@ -893,6 +893,65 @@ class CopilotContextTests(TestCase):
         self.assertIsNone(insights.build_copilot_context([]))
 
 
+class AwarenessTests(TestCase):
+    """Zaya consciente: padrão do atleta + sinais fora do comum (heurística honesta)."""
+
+    def test_signals_flag_volume_drop_and_layoff(self):
+        from runner.services import insights
+
+        # Baseline frequente (8–34 dias atrás) e NADA nos últimos 7 dias.
+        runs = [make_run(10_000, 3_000, days_ago=a)
+                for a in (8, 9, 11, 13, 15, 16, 18, 20, 22, 24, 26, 28, 30, 33)]
+        kinds = {s["kind"] for s in insights.behavioral_signals(runs)}
+        self.assertIn("volume_baixo", kinds)   # 0 km nos últimos 7 dias vs média
+        self.assertIn("parado", kinds)         # dias sem correr acima do normal
+
+    def test_pattern_present_in_context(self):
+        from runner.services import insights
+
+        runs = [make_run(8_000, 2_640, days_ago=2 * i + 1) for i in range(8)]
+        ctx = insights.build_copilot_context(runs)
+        self.assertIsNotNone(ctx.get("padrao"))
+        self.assertIn("sessoes_por_semana", ctx["padrao"])
+
+    def test_no_signals_with_thin_history(self):
+        from runner.services import insights
+
+        self.assertEqual(insights.behavioral_signals([make_run(5_000, 1_650)]), [])
+
+
+class CopilotMemoryTests(TestCase):
+    """A Zaya lembra das conversas anteriores (continuidade, não-robótica)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("mem", password="x")
+        Activity.objects.create(
+            user=self.user, source=Activity.SOURCE_STRAVA, external_id="r1",
+            sport_type="Run", start_date=timezone.now() - timedelta(days=2),
+            distance_m=8_000, moving_time_s=2_640,
+        )
+
+    def test_prompt_includes_prior_conversation(self):
+        from runner.models import CopilotChat
+        from runner.services import coaching
+
+        CopilotChat.objects.create(
+            athlete=self.user, question="Pergunta antiga ABC", answer="Resposta antiga XYZ"
+        )
+        captured = {}
+
+        def fake_complete(system, user_text, **kw):
+            captured["u"] = user_text
+            return "ok"
+
+        with mock.patch.object(coaching.ai, "is_enabled", return_value=True), \
+                mock.patch.object(coaching.ai, "complete", side_effect=fake_complete):
+            out = coaching.answer_question(self.user, "Pergunta atual DEF")
+        self.assertEqual(out, "ok")
+        self.assertIn("Pergunta antiga ABC", captured["u"])   # memória no prompt
+        self.assertIn("Pergunta atual DEF", captured["u"])
+
+
 class MultiPlanGatingTests(TestCase):
     """Múltiplos planos: só o ATIVO conta no dia a dia (calendário + matching)."""
 

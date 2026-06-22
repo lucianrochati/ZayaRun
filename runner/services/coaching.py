@@ -270,12 +270,20 @@ def answer_question(athlete, question):
                 "GROQ_API_KEY (console.groq.com, sem cartão) — ou GEMINI_API_KEY / "
                 "ANTHROPIC_API_KEY — no ambiente. Enquanto isso, seu painel já traz "
                 "pace, carga (ACWR) e projeção de provas — boa parte das respostas está lá.")
-    text = ai.complete(
-        SYSTEM_COPILOT,
-        f"Pergunta do atleta: {question}\n\nDados do atleta (JSON):\n"
-        f"{json.dumps(ctx, ensure_ascii=False)}",
-        max_tokens=900,
+    # Memória: as últimas conversas (cronológico) para a Zaya dar continuidade.
+    prior = list(athlete.copilot_chats.all()[:5])[::-1]
+    convo = "\n".join(f"Atleta: {c.question}\nZaya: {c.answer}" for c in prior)
+    user_text = ""
+    if convo:
+        user_text += (
+            "Conversa anterior com este atleta (use para continuidade; não repita à toa):\n"
+            f"{convo}\n\n"
+        )
+    user_text += (
+        f"Pergunta atual do atleta: {question}\n\n"
+        f"Dados do atleta (JSON):\n{json.dumps(ctx, ensure_ascii=False)}"
     )
+    text = ai.complete(SYSTEM_COPILOT, user_text, max_tokens=900)
     return text or (
         "A Zaya está temporariamente indisponível (limite de uso da IA ou "
         "instabilidade). Tente de novo em alguns minutos — seus dados de pace, carga "
@@ -301,6 +309,13 @@ SYSTEM_COPILOT = (
     "diferente da perguntada. Se não houver corridas que se encaixem, diga isso "
     "claramente (não invente). Quando listar várias corridas, use uma lista curta "
     "(uma linha por corrida: data — distância — pace).\n"
+    "MEMÓRIA: quando houver 'Conversa anterior', use-a para dar CONTINUIDADE — "
+    "referencie o que já foi dito, não se repita e não recomece do zero como um robô.\n"
+    "CONSCIÊNCIA: o JSON traz `padrao` (os hábitos NORMAIS deste atleta — dias, volume "
+    "típico, pace fácil, nível) e pode trazer `sinais_fora_do_padrao` (desvios do normal "
+    "dele, ex.: volume caiu, dias parado, pace mais lento, PSE subindo). Você CONHECE "
+    "este atleta: quando for relevante para a pergunta, comente proativamente esses "
+    "desvios, relacione ao histórico e ajuste sua orientação ao estado real dele.\n"
     "Responda em PT-BR, direto e objetivo, sem markdown pesado. Nunca invente números "
     "que não estejam nos dados. Não dê diagnóstico médico: em caso de dor ou lesão, "
     "oriente procurar um profissional de saúde."
