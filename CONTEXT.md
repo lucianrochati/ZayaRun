@@ -45,7 +45,7 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Compliance Strava:** ao desconectar, purga atividades + perfil (exigência dos termos).
 - **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
 - **Deploy:** no ar no **Railway** (Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn; `runtime.txt` em 3.12.10 (fix mise). `seed_demo` popula treinador/atleta demo.
-- **Testes:** 75 passando (`python manage.py test`).
+- **Testes:** 82 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
@@ -139,7 +139,15 @@ python manage.py runserver
    cache-primeiro; ignora POST/OAuth/sync). **Banner de instalação** (`_pwa_install.html`, incluído no `base.html`):
    Android/Chrome usa `beforeinstallprompt`; iOS mostra "Compartilhar → Adicionar à Tela de Início"; some se já
    instalado. ⚠️ **Segredo:** chave da IA só no `.env`/Config Vars — **nunca** no `.env.example` (versionado/público).
-   Testes: **75 passando** (+2 PWA, + Groq/diagnóstico).
+9. **Copiloto → "Fale com a Zaya".** Textos visíveis e a **persona da IA** viraram **Zaya** (treinadora); rotas/nomes
+   internos (`name='copilot'`, `/copiloto/`) mantidos. **Contexto rico:** o copiloto recebe a LISTA real de corridas
+   (`insights.build_copilot_context`: data/distância/pace por corrida) → responde datas e distingue 5k×8k sem misturar.
+10. **Histórico da Zaya:** modelo `CopilotChat`; a view salva cada conversa e mostra as **últimas 5** (consultar).
+11. **Múltiplos planos, 1 ativo:** `TrainingPlan.status` ganhou `inactive`. Atleta tem vários planos guardados; só o
+    **ativo** conta no painel/calendário/matching (`models.live_planned_filter()` aplicado em `planned_week`, `my_plan`,
+    `matching`). Criar plano arquiva o anterior (sem apagar treinos); `activate_plan` (`/plano/<id>/ativar/`) alterna.
+    UI: lista "Outros planos" + Ativar (`plan.html`) e badge/botão no `plan_detail`.
+   Testes: **82 passando** (PWA, Groq/diagnóstico, histórico Zaya, múltiplos planos, gating de calendário+matching).
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
@@ -166,7 +174,7 @@ python manage.py runserver
 
 ## 10. Como retomar
 Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`.\.venv\Scripts\python.exe manage.py test`) para confirmar
-baseline (**75 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
-evolução, pace/zona calibrados, Copiloto só-corrida, PWA instalável) **já foram entregues** (seção 8).
+baseline (**82 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
+evolução, pace/zona calibrados, Zaya c/ histórico, múltiplos planos, PWA instalável) **já foram entregues** (seção 8).
 Próximo passo: ver "Próximos passos" abaixo (host de produção / Play). Para ligar a IA grátis: setar `GROQ_API_KEY`
 (console.groq.com, sem cartão) no `.env`/Railway — `AI_PROVIDER=auto` já prioriza o Groq. (`/ai/diag` diagnostica.)
