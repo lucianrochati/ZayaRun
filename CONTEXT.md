@@ -45,7 +45,7 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Compliance Strava:** ao desconectar, purga atividades + perfil (exigência dos termos).
 - **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
 - **Deploy:** no ar no **Railway** (Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn; `runtime.txt` em 3.12.10 (fix mise). `seed_demo` popula treinador/atleta demo.
-- **Testes:** 82 passando (`python manage.py test`).
+- **Testes:** 85 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
@@ -147,7 +147,12 @@ python manage.py runserver
     **ativo** conta no painel/calendário/matching (`models.live_planned_filter()` aplicado em `planned_week`, `my_plan`,
     `matching`). Criar plano arquiva o anterior (sem apagar treinos); `activate_plan` (`/plano/<id>/ativar/`) alterna.
     UI: lista "Outros planos" + Ativar (`plan.html`) e badge/botão no `plan_detail`.
-   Testes: **82 passando** (PWA, Groq/diagnóstico, histórico Zaya, múltiplos planos, gating de calendário+matching).
+12. **Autorregulação (anti-sobrecarga):** `services/autoreg.py` fecha o ciclo feedback→plano. Ao concluir um treino e
+    relatar negativo (PSE alto + sensação cansado/mal + dor), `assess()` classifica `none|ease|suave|reduce` e
+    `autoregulate()` ajusta os próximos ≤7 dias do plano ATIVO: reduz distância (−7%/−15%, piso 3 km), troca o
+    próximo treino forte por rodagem leve (caso forte), nota transparente em cada treino (idempotente) e, com dor,
+    recomenda avaliação profissional (em `plan.notes`). Chamado em `workout_feedback`; avisa o atleta ("Zaya: …").
+   Testes: **85 passando** (PWA, Groq/diagnóstico, histórico Zaya, múltiplos planos, gating, autorregulação).
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
@@ -174,7 +179,7 @@ python manage.py runserver
 
 ## 10. Como retomar
 Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`.\.venv\Scripts\python.exe manage.py test`) para confirmar
-baseline (**82 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
+baseline (**85 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
 evolução, pace/zona calibrados, Zaya c/ histórico, múltiplos planos, PWA instalável) **já foram entregues** (seção 8).
 Próximo passo: ver "Próximos passos" abaixo (host de produção / Play). Para ligar a IA grátis: setar `GROQ_API_KEY`
 (console.groq.com, sem cartão) no `.env`/Railway — `AI_PROVIDER=auto` já prioriza o Groq. (`/ai/diag` diagnostica.)
