@@ -79,8 +79,10 @@ h3{font-size:15px}
 .who{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px;font-weight:500}
 .avatar{
   width:30px;height:30px;border-radius:var(--r-pill);display:grid;place-items:center;
-  background:var(--brand-grad);color:#fff;font-size:13px;font-weight:700;text-transform:uppercase;
+  background:var(--brand-grad);color:#fff;font-size:13px;font-weight:700;text-transform:uppercase;flex:none;
 }
+.who-name{color:var(--text);font-weight:600;max-width:42vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:380px){ .who-name{max-width:30vw} }
 .inline{display:inline}
 .link-btn{background:none;border:none;color:var(--muted);cursor:pointer;font:inherit;font-size:14px;padding:6px 4px;border-radius:8px}
 .link-btn:hover{color:var(--text)}

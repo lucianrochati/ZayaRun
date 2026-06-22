@@ -507,6 +507,16 @@ class ViewSmokeTests(TestCase):
             self.assertEqual(self.client.get(reverse("copilot")).status_code, 200)
             self.assertEqual(self.client.get(reverse("coach_dashboard")).status_code, 200)
 
+    def test_topbar_shows_full_name(self):
+        """O topo mostra o NOME do usuário logado (não só a inicial)."""
+        from runner.models import Profile
+
+        Profile.objects.update_or_create(
+            user=self.user, defaults={"display_name": "Lucian Rochati"}
+        )
+        resp = self.client.get(reverse("dashboard"))
+        self.assertContains(resp, "Lucian Rochati")
+
     def test_coach_flow_end_to_end(self):
         self.client.post(reverse("become_coach"))
         with self.settings(INSIGHT_PROVIDER="rules"):

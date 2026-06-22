@@ -30,9 +30,12 @@
     </a>
     <nav>
       {% if user.is_authenticated %}
+        {% with dname=user.profile.display_name|default:user.get_full_name|default:user.get_username %}
         <span class="who">
-          <span class="avatar">{{ user.username|slice:":1" }}</span>
+          <span class="avatar">{{ dname|slice:":1"|upper }}</span>
+          <span class="who-name">{{ dname }}</span>
         </span>
+        {% endwith %}
         <form action="{% url 'logout' %}" method="post" class="inline">
           {% csrf_token %}
           <button class="link-btn" type="submit">Sair</button>
