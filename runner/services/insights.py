@@ -252,10 +252,29 @@ def behavioral_signals(activities, athlete=None, profile=None):
                             "text": (f"Suas últimas corridas saíram ~{round((med / easy - 1) * 100)}% mais "
                                      "lentas que seu ritmo fácil habitual — pode ser fadiga, calor ou dia ruim.")})
 
-    # 4) Tendência de PSE (precisa do atleta para ler os feedbacks).
+    # 4) Tendência de PSE + decisões do atleta (precisa do atleta para ler os registros).
     if athlete is not None:
         signals += _rpe_trend_signal(athlete)
+        signals += _declined_signal(athlete)
     return signals
+
+
+def _declined_signal(athlete):
+    """Consciência das DECISÕES: o atleta costuma manter o treino mesmo quando sugiro aliviar."""
+    from runner.models import CoachSuggestion
+
+    since = timezone.now() - timedelta(days=30)
+    n = CoachSuggestion.objects.filter(
+        athlete=athlete, status=CoachSuggestion.STATUS_DECLINED, created_at__gte=since
+    ).count()
+    if n >= 2:
+        return [{
+            "kind": "mantem_treino", "level": "info",
+            "text": (f"Este atleta costuma MANTER o treino mesmo quando sugiro aliviar "
+                     f"(manteve {n} vez(es) nos últimos 30 dias) — respeite a autonomia dele e "
+                     "só insista quando o sinal for forte (dor, ACWR alto)."),
+        }]
+    return []
 
 
 # --------------------------------------------------------------------------

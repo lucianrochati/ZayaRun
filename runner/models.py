@@ -155,6 +155,16 @@ class Profile(models.Model):
     # Usados para zonas/zonas-alvo e leitura de wellness (futuro Garmin).
     resting_hr = models.IntegerField(null=True, blank=True)
     max_hr = models.IntegerField(null=True, blank=True)
+    # Quanto a Zaya pode mexer no plano após um feedback negativo.
+    AUTONOMY_SUGGEST = "suggest"   # só sugere; o atleta decide (padrão — respeita autonomia)
+    AUTONOMY_AUTO = "auto"         # ajusta e avisa (reversível)
+    AUTONOMY_OFF = "off"           # não interfere
+    AUTONOMY_CHOICES = [
+        (AUTONOMY_SUGGEST, "Só sugerir (você decide)"),
+        (AUTONOMY_AUTO, "Ajustar e avisar"),
+        (AUTONOMY_OFF, "Não interferir"),
+    ]
+    coach_autonomy = models.CharField(max_length=8, choices=AUTONOMY_CHOICES, default=AUTONOMY_SUGGEST)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -640,3 +650,40 @@ class CopilotChat(models.Model):
 
     def __str__(self):
         return f"Zaya · {self.athlete.get_username()} · {self.created_at:%d/%m %H:%M}"
+
+
+class CoachSuggestion(models.Model):
+    """
+    Sugestão de ajuste da Zaya após um feedback (ex.: aliviar os próximos treinos).
+    Por padrão NÃO é aplicada — o atleta aceita ou mantém o treino. Registrar o
+    'manter' (declined) alimenta a consciência da Zaya sobre as decisões do atleta.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_DECLINED = "declined"
+    STATUS_AUTO = "auto"        # aplicada automaticamente (autonomia = auto)
+    STATUS_EXPIRED = "expired"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendente"),
+        (STATUS_ACCEPTED, "Aceita"),
+        (STATUS_DECLINED, "Mantido pelo atleta"),
+        (STATUS_AUTO, "Aplicada automaticamente"),
+        (STATUS_EXPIRED, "Expirada"),
+    ]
+
+    athlete = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="coach_suggestions"
+    )
+    level = models.CharField(max_length=8)          # ease | reduce
+    reasons = models.JSONField(default=list)        # motivos legíveis (do assess)
+    summary = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Sugestão Zaya ({self.get_status_display()}) - {self.athlete.get_username()}"

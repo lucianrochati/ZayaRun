@@ -1,0 +1,19 @@
+{% if zaya_suggestion %}
+<div class="card zaya-suggest">
+  <div class="card-head"><h3>💬 A Zaya sugere</h3><span class="pill pill-atencao">você decide</span></div>
+  <p class="insight-text" style="margin:.2em 0 12px">{{ zaya_suggestion.summary }}</p>
+  <div class="suggest-actions">
+    <form action="{% url 'resolve_suggestion' zaya_suggestion.id %}" method="post" class="inline">
+      {% csrf_token %}<input type="hidden" name="action" value="accept">
+      <input type="hidden" name="next" value="{% url 'my_plan' %}">
+      <button class="btn btn-sm btn-primary" type="submit">✓ Aceitar sugestão</button>
+    </form>
+    <form action="{% url 'resolve_suggestion' zaya_suggestion.id %}" method="post" class="inline">
+      {% csrf_token %}<input type="hidden" name="action" value="decline">
+      <input type="hidden" name="next" value="{% url 'my_plan' %}">
+      <button class="btn btn-sm btn-ghost" type="submit">Manter meu treino</button>
+    </form>
+  </div>
+  <p class="card-sub" style="margin:10px 0 0">Você manda. A Zaya só sugere — e respeita a sua decisão.</p>
+</div>
+{% endif %}

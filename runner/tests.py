@@ -1013,7 +1013,7 @@ class MultiPlanGatingTests(TestCase):
 
 
 class AutoregTests(TestCase):
-    """Autorregulação: feedback negativo revê os próximos treinos do plano ativo."""
+    """Autorregulação: por padrão SUGERE (não impõe); respeita a autonomia do atleta."""
 
     def setUp(self):
         self.user = User.objects.create_user("auto", password="x")
@@ -1037,54 +1037,104 @@ class AutoregTests(TestCase):
         )
         return plan, hard, easy
 
-    def test_negative_feedback_reduces_and_softens(self):
+    def _feedback(self, **kw):
         from runner.models import WorkoutFeedback
+
+        defaults = dict(athlete=self.user, date=timezone.localdate(),
+                        rpe=9, feeling="bad", soreness=4)
+        defaults.update(kw)
+        return WorkoutFeedback.objects.create(**defaults)
+
+    def _set_autonomy(self, value):
+        from runner.models import Profile
+
+        Profile.objects.update_or_create(user=self.user, defaults={"coach_autonomy": value})
+
+    def test_default_only_suggests_does_not_touch_plan(self):
+        """Postura padrão: SUGERE; nunca muda o treino sem o atleta aceitar."""
+        from runner.models import CoachSuggestion
         from runner.services import autoreg
 
         plan, hard, easy = self._plan_with_upcoming()
-        fb = WorkoutFeedback.objects.create(
-            athlete=self.user, date=timezone.localdate(), rpe=9, feeling="bad", soreness=4,
-        )
-        adj = autoreg.autoregulate(self.user, fb, None)
-        self.assertEqual(adj["level"], "reduce")
-        self.assertGreaterEqual(adj["changed"], 2)
-        self.assertTrue(adj["softened"])
+        out = autoreg.autoregulate(self.user, self._feedback(), None)
+        self.assertEqual(out["mode"], "suggest")
+        self.assertFalse(out["applied"])
+        self.assertIsNotNone(out["suggestion"])
         hard.refresh_from_db(); easy.refresh_from_db()
-        self.assertEqual(hard.workout_type, "easy")        # forte virou leve
-        self.assertLess(hard.target_distance_m, 8000)      # distância reduzida
+        self.assertEqual(hard.workout_type, "interval")    # NÃO mexeu
+        self.assertEqual(easy.target_distance_m, 6000)     # NÃO reduziu
+        self.assertEqual(
+            CoachSuggestion.objects.filter(athlete=self.user, status="pending").count(), 1
+        )
+
+    def test_accept_applies_the_adjustment(self):
+        from runner.services import autoreg
+
+        plan, hard, easy = self._plan_with_upcoming()
+        out = autoreg.autoregulate(self.user, self._feedback(), None)
+        autoreg.accept_suggestion(out["suggestion"])
+        hard.refresh_from_db(); easy.refresh_from_db()
+        self.assertEqual(hard.workout_type, "easy")        # só agora vira leve
         self.assertLess(easy.target_distance_m, 6000)
-        self.assertIn("Ajuste Zaya", easy.description)
+        out["suggestion"].refresh_from_db()
+        self.assertEqual(out["suggestion"].status, "accepted")
+
+    def test_decline_keeps_plan_and_records_decision(self):
+        from runner.services import autoreg
+
+        plan, hard, easy = self._plan_with_upcoming()
+        out = autoreg.autoregulate(self.user, self._feedback(), None)
+        autoreg.decline_suggestion(out["suggestion"])
+        hard.refresh_from_db()
+        self.assertEqual(hard.workout_type, "interval")    # mantido (respeita o atleta)
+        out["suggestion"].refresh_from_db()
+        self.assertEqual(out["suggestion"].status, "declined")
+
+    def test_auto_mode_applies_and_notes_plan(self):
+        from runner.services import autoreg
+
+        self._set_autonomy("auto")
+        plan, hard, easy = self._plan_with_upcoming()
+        out = autoreg.autoregulate(self.user, self._feedback(), None)
+        self.assertEqual(out["mode"], "auto")
+        self.assertTrue(out["applied"])
+        hard.refresh_from_db()
+        self.assertEqual(hard.workout_type, "easy")
         plan.refresh_from_db()
         self.assertIn("avaliação", plan.notes.lower())     # dor alta → recomenda profissional
 
-    def test_positive_feedback_changes_nothing(self):
-        from runner.models import WorkoutFeedback
+    def test_off_mode_does_nothing(self):
         from runner.services import autoreg
 
+        self._set_autonomy("off")
         plan, hard, easy = self._plan_with_upcoming()
-        fb = WorkoutFeedback.objects.create(
-            athlete=self.user, date=timezone.localdate(), rpe=4, feeling="good", soreness=1,
-        )
-        adj = autoreg.autoregulate(self.user, fb, None)
-        self.assertEqual(adj["level"], "none")
-        self.assertEqual(adj["changed"], 0)
+        out = autoreg.autoregulate(self.user, self._feedback(), None)
+        self.assertEqual(out["mode"], "off")
         hard.refresh_from_db()
-        self.assertEqual(hard.workout_type, "interval")    # intacto
+        self.assertEqual(hard.workout_type, "interval")
 
-    def test_idempotent_does_not_compound(self):
-        from runner.models import WorkoutFeedback
+    def test_positive_feedback_changes_nothing(self):
         from runner.services import autoreg
 
         plan, hard, easy = self._plan_with_upcoming()
-        fb = WorkoutFeedback.objects.create(
-            athlete=self.user, date=timezone.localdate(), rpe=9, feeling="bad", soreness=4,
-        )
-        autoreg.autoregulate(self.user, fb, None)
-        easy.refresh_from_db()
-        km1 = easy.target_distance_m
-        autoreg.autoregulate(self.user, fb, None)          # roda de novo
-        easy.refresh_from_db()
-        self.assertEqual(easy.target_distance_m, km1)      # não reduz em cima do reduzido
+        out = autoreg.autoregulate(self.user, self._feedback(rpe=4, feeling="good", soreness=1), None)
+        self.assertEqual(out["mode"], "none")
+        hard.refresh_from_db()
+        self.assertEqual(hard.workout_type, "interval")
+
+    def test_declined_suggestions_become_awareness_signal(self):
+        """Ignorar sugestões alimenta a consciência da Zaya (sinal honesto)."""
+        from runner.models import CoachSuggestion
+        from runner.services import insights
+
+        for _ in range(2):
+            CoachSuggestion.objects.create(
+                athlete=self.user, level="reduce", reasons=["x"],
+                summary="s", status=CoachSuggestion.STATUS_DECLINED,
+            )
+        runs = [make_run(8_000, 2_640, days_ago=2 * i + 1) for i in range(6)]
+        kinds = {s["kind"] for s in insights.behavioral_signals(runs, athlete=self.user)}
+        self.assertIn("mantem_treino", kinds)
 
 
 class AIProviderTests(TestCase):

@@ -20,6 +20,7 @@ from runner.models import (
     WORKOUT_TYPES,
     Anamnese,
     CoachAthlete,
+    CoachSuggestion,
     CopilotChat,
     DailyCheckin,
     PlannedWorkout,
@@ -333,6 +334,9 @@ def my_plan(request):
         "today_checkin": DailyCheckin.objects.filter(
             athlete=request.user, date=timezone.localdate()
         ).first(),
+        "zaya_suggestion": autoreg.pending_suggestion(request.user),
+        "autonomy": get_profile(request.user).coach_autonomy,
+        "autonomy_choices": Profile.AUTONOMY_CHOICES,
     })
 
 
@@ -364,13 +368,44 @@ def workout_feedback(request, planned_id):
         },
     )
     messages.success(request, "Feedback registrado — isso calibra seus próximos treinos.")
-    # Autorregulação: feedback negativo → revê os próximos treinos do plano ativo.
+    # Autorregulação: respeita a autonomia (por padrão SUGERE, não impõe).
     try:
         adj = autoreg.autoregulate(request.user, feedback, planned)
-        if adj["changed"]:
+        if adj["mode"] == "auto" and adj["applied"]:
             messages.warning(request, "Zaya: " + adj["summary"])
+        elif adj["mode"] == "suggest" and adj["suggestion"]:
+            messages.info(request, "A Zaya tem uma sugestão para o seu plano — veja abaixo.")
+            return redirect("my_plan")  # mostra o card de sugestão (você decide)
     except Exception:  # noqa: BLE001 — ajuste nunca pode quebrar o registro do feedback
         logger.exception("Falha na autorregulação após feedback")
+    return redirect(request.POST.get("next") or "my_plan")
+
+
+@login_required
+@require_POST
+def resolve_suggestion(request, suggestion_id):
+    """O atleta aceita (aplica) ou mantém o treino (registra a decisão)."""
+    sug = get_object_or_404(
+        CoachSuggestion, pk=suggestion_id, athlete=request.user,
+        status=CoachSuggestion.STATUS_PENDING,
+    )
+    if request.POST.get("action") == "accept":
+        messages.success(request, "Zaya: " + autoreg.accept_suggestion(sug))
+    else:
+        autoreg.decline_suggestion(sug)
+        messages.info(request, "Beleza — mantive seu treino como estava. 💪 Sente o corpo durante a corrida.")
+    return redirect(request.POST.get("next") or "my_plan")
+
+
+@login_required
+@require_POST
+def set_zaya_autonomy(request):
+    """Define quanto a Zaya pode mexer no plano (só sugerir / ajustar / não interferir)."""
+    value = request.POST.get("coach_autonomy")
+    if value in dict(Profile.AUTONOMY_CHOICES):
+        get_profile(request.user)  # garante o Profile
+        Profile.objects.filter(user=request.user).update(coach_autonomy=value)
+        messages.success(request, "Preferência da Zaya salva.")
     return redirect(request.POST.get("next") or "my_plan")
 
 

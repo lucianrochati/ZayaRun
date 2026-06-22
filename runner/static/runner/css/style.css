@@ -340,6 +340,9 @@ textarea{resize:vertical;min-height:70px}
 .bubble-ai{background:linear-gradient(180deg,rgba(255,90,54,.07),var(--surface) 70%);
   border:1px solid var(--border);border-left:4px solid var(--brand)}
 .bubble-ai b{color:var(--brand-2)}
+.zaya-suggest{border-left:4px solid var(--brand);
+  background:linear-gradient(180deg,rgba(255,90,54,.07),var(--surface) 70%)}
+.suggest-actions{display:flex;gap:8px;flex-wrap:wrap}
 .chat-history{margin-top:6px}
 .chat-turn{padding:8px 0;border-top:1px solid var(--border)}
 .chat-turn:first-child{border-top:none}

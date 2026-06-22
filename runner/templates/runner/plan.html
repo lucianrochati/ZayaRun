@@ -51,6 +51,30 @@
 <p class="card-sub" style="margin-left:4px">✓ Check-in de hoje registrado.</p>
 {% endif %}
 
+<!-- Sugestão da Zaya (autorregulação) — você decide -->
+{% include "runner/_zaya_suggestion.html" %}
+
+<!-- Autonomia da Zaya: quanto ela pode mexer no plano -->
+<details class="add-details">
+  <summary class="btn btn-sm btn-ghost" style="display:inline-flex">⚙️ Como a Zaya age comigo</summary>
+  <div class="card" style="margin-top:10px">
+    <p class="card-sub" style="margin-top:0">Quando você relata cansaço/dor num treino, o que a Zaya faz com os próximos?</p>
+    <form action="{% url 'set_zaya_autonomy' %}" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{% url 'my_plan' %}">
+      <div class="feel-row" style="flex-direction:column;gap:6px">
+        {% for val, label in autonomy_choices %}
+        <label class="feel-opt" style="flex:none;text-align:left;display:flex;align-items:center;gap:8px">
+          <input type="radio" name="coach_autonomy" value="{{ val }}" {% if autonomy == val %}checked{% endif %}> {{ label }}
+        </label>
+        {% endfor %}
+      </div>
+      <button class="btn btn-sm btn-primary" type="submit" style="margin-top:8px">Salvar</button>
+    </form>
+    <p class="card-sub" style="margin:8px 0 0;color:var(--faint)">Padrão: <b>Só sugerir</b> — a Zaya nunca muda seu treino sem você aceitar.</p>
+  </div>
+</details>
+
 {% if plan %}
   <div class="card">
     <div class="card-head">
