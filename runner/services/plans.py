@@ -49,6 +49,61 @@ def _km_txt(km):
     return f"{km:.0f}" if abs(km - round(km)) < 0.05 else f"{km:.1f}"
 
 
+# Propósito de cada tipo de treino — explicação REAL de treinador (sai da caixa-preta).
+WORKOUT_PURPOSE = {
+    "long": (
+        "Construir base aeróbica e resistência. O ritmo confortável e prolongado aumenta "
+        "mitocôndrias e capilares, ensina o corpo a usar gordura como combustível e "
+        "fortalece tendões e articulações para aguentar a distância da prova."
+    ),
+    "easy": (
+        "Base aeróbica e recuperação ativa. Correr leve aumenta a circulação, ajuda a "
+        "recuperar dos treinos fortes e acumula volume sem desgaste — a maior parte da "
+        "evolução vem daqui, não dos treinos puxados."
+    ),
+    "recovery": (
+        "Regenerativo. Muito leve, só para ativar a circulação e acelerar a recuperação "
+        "muscular sem somar fadiga."
+    ),
+    "tempo": (
+        "Elevar o limiar de lactato. Sustentar o ritmo 'controlado-forte' empurra o ponto "
+        "em que o lactato começa a acumular — assim você segura paces mais rápidos por "
+        "mais tempo sem 'estourar'."
+    ),
+    "interval": (
+        "Potência aeróbica (VO₂máx) e economia de corrida. Tiros fortes e curtos elevam o "
+        "consumo máximo de oxigênio e ensinam a perna a ser mais eficiente — é o que te "
+        "deixa mais rápido."
+    ),
+    "strides": (
+        "Base + ajuste neuromuscular. A rodagem mantém o aeróbico; os tiros curtos no fim "
+        "ativam a mecânica, a cadência e o recrutamento muscular sem gerar fadiga — afiam "
+        "a passada."
+    ),
+    "fartlek": (
+        "Trabalho de ritmo variado. Alterna forte e leve por sensação, desenvolvendo "
+        "potência aeróbica e a capacidade de mudar de ritmo — útil para provas com variação."
+    ),
+    "race": (
+        "Dia da prova: colher tudo o que foi treinado. Confie no plano, comece controlado "
+        "e administre o esforço — o ganho já está no banco."
+    ),
+    "rest": (
+        "Descanso. É no repouso que o corpo absorve o treino e fica mais forte — pular o "
+        "descanso é onde mora a lesão."
+    ),
+    "cross": (
+        "Treino cruzado. Mantém o condicionamento com menos impacto, dando alívio às "
+        "articulações enquanto sustenta o motor aeróbico."
+    ),
+}
+
+
+def workout_purpose(workout_type):
+    """Por que este treino existe — explicação de treinador para tirar da caixa-preta."""
+    return WORKOUT_PURPOSE.get(workout_type)
+
+
 def _pace_range_str(paces, kind):
     """Faixa de pace de um tipo como 'm:ss–m:ss/km' (ou 'm:ss/km' se único)."""
     lo, hi = paces.get(kind, (None, None))

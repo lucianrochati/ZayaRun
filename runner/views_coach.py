@@ -120,6 +120,7 @@ def planned_week(athlete, ref_date=None):
     )
     for w in workouts:
         w.adherence = metrics.adherence(w, w.matched_activity) if w.matched_activity else None
+        w.purpose = plans.workout_purpose(w.workout_type)
     by_date = {}
     for w in workouts:
         by_date.setdefault(w.date, []).append(w)
@@ -480,6 +481,7 @@ def _plan_weeks(plan):
     workouts = list(plan.workouts.select_related("matched_activity").order_by("date"))
     for w in workouts:
         w.adherence = metrics.adherence(w, w.matched_activity) if w.matched_activity else None
+        w.purpose = plans.workout_purpose(w.workout_type)
     today = timezone.localdate()
     by_monday = {}
     for w in workouts:

@@ -104,11 +104,19 @@
             </span>
             <span class="wo-meta">
               {{ w.date|date:"D d/m" }}
-              {% if w.target_distance_km %} · {{ w.target_distance_km }} km{% endif %}
+              {% if w.target_distance_km %} · Planejado <b>{{ w.target_distance_km }} km</b>{% endif %}
               {% if w.target_pace_str %} · {{ w.target_pace_str }}/km{% endif %}
             </span>
+            {% if w.matched_activity %}
+              <span class="wo-real">✅ Realizado <b>{{ w.matched_activity.distance_km|floatformat:1 }} km</b>
+                {% if w.matched_activity.pace_str %} · {{ w.matched_activity.pace_str }}/km{% endif %}
+                {% if w.adherence %}<span class="pill pill-{{ w.adherence.zone }}">{{ w.adherence.score }}%</span>{% endif %}
+              </span>
+            {% elif w.status == 'completed' %}
+              <span class="wo-real">✅ Concluído (sem dados da Strava)</span>
+            {% endif %}
             {% if w.description %}<span class="wo-desc">{{ w.description }}</span>{% endif %}
-            {% if w.adherence %}<span class="pill pill-{{ w.adherence.zone }} wo-adh">{{ w.adherence.status }} · {{ w.adherence.score }}%</span>{% endif %}
+            {% if w.purpose %}<details class="wo-why"><summary>🎯 Por que este treino</summary><span>{{ w.purpose }}</span></details>{% endif %}
           </div>
           <div class="wo-actions">
             <form action="{% url 'complete_workout' w.id %}" method="post" class="inline">

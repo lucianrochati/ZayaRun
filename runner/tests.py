@@ -517,6 +517,38 @@ class ViewSmokeTests(TestCase):
         resp = self.client.get(reverse("dashboard"))
         self.assertContains(resp, "Lucian Rochati")
 
+    def test_workout_purpose_explains_each_type(self):
+        """Cada treino tem um propósito real (sai da caixa-preta)."""
+        from runner.services import plans
+
+        for t in ("long", "easy", "tempo", "interval", "strides", "race", "rest"):
+            self.assertTrue(plans.workout_purpose(t), t)
+        self.assertIn("aeróbica", plans.workout_purpose("long").lower())
+
+    def test_plan_detail_shows_planned_vs_realized_and_purpose(self):
+        """No card: Planejado X × Realizado Y (da Strava) + 'Por que este treino'."""
+        from runner.models import Activity, PlannedWorkout, TrainingPlan
+
+        plan = TrainingPlan.objects.create(
+            athlete=self.user, goal_distance_m=10000,
+            goal_race_date=timezone.localdate() + timedelta(days=40),
+            start_date=timezone.localdate(), status=TrainingPlan.STATUS_ACTIVE,
+        )
+        act = Activity.objects.create(
+            user=self.user, source=Activity.SOURCE_STRAVA, external_id="pr1",
+            sport_type="Run", start_date=timezone.now(), distance_m=5000, moving_time_s=1650,
+        )
+        PlannedWorkout.objects.create(
+            athlete=self.user, plan=plan, date=timezone.localdate(), workout_type="long",
+            title="Longão 9 km", target_distance_m=9000, matched_activity=act,
+            status=PlannedWorkout.STATUS_COMPLETED,
+        )
+        resp = self.client.get(reverse("plan_detail", args=[plan.id]))
+        self.assertContains(resp, "Planejado")
+        # Bloco "Realizado" só renderiza quando há atividade da Strava casada (5 km).
+        self.assertContains(resp, "Realizado")
+        self.assertContains(resp, "Por que este treino")    # propósito do longão
+
     def test_coach_flow_end_to_end(self):
         self.client.post(reverse("become_coach"))
         with self.settings(INSIGHT_PROVIDER="rules"):
