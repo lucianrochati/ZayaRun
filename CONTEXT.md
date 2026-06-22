@@ -45,7 +45,7 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Compliance Strava:** ao desconectar, purga atividades + perfil (exigência dos termos).
 - **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
 - **Deploy:** no ar no **Railway** (Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn; `runtime.txt` em 3.12.10 (fix mise). `seed_demo` popula treinador/atleta demo.
-- **Testes:** 85 passando (`python manage.py test`).
+- **Testes:** 89 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
@@ -152,7 +152,12 @@ python manage.py runserver
     `autoregulate()` ajusta os próximos ≤7 dias do plano ATIVO: reduz distância (−7%/−15%, piso 3 km), troca o
     próximo treino forte por rodagem leve (caso forte), nota transparente em cada treino (idempotente) e, com dor,
     recomenda avaliação profissional (em `plan.notes`). Chamado em `workout_feedback`; avisa o atleta ("Zaya: …").
-   Testes: **85 passando** (PWA, Groq/diagnóstico, histórico Zaya, múltiplos planos, gating, autorregulação).
+13. **Zaya consciente + memória:** `insights.athlete_pattern()` (hábitos normais: dias, volume, pace fácil, nível) e
+    `insights.behavioral_signals()` (desvios vs baseline do `FitnessProfile`: volume caiu/subiu, dias parado, pace
+    recente mais lento, PSE subindo) entram no contexto do copiloto (`padrao`, `sinais_fora_do_padrao`).
+    `answer_question` passa as **últimas conversas** (`CopilotChat`) no prompt → **memória/continuidade**.
+    `SYSTEM_COPILOT` usa memória + comenta desvios proativamente, sempre ancorado no histórico (heurística honesta).
+   Testes: **89 passando** (+ consciência: sinais/padrão; + memória da conversa).
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
@@ -179,7 +184,7 @@ python manage.py runserver
 
 ## 10. Como retomar
 Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`.\.venv\Scripts\python.exe manage.py test`) para confirmar
-baseline (**85 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
+baseline (**89 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
 evolução, pace/zona calibrados, Zaya c/ histórico, múltiplos planos, PWA instalável) **já foram entregues** (seção 8).
 Próximo passo: ver "Próximos passos" abaixo (host de produção / Play). Para ligar a IA grátis: setar `GROQ_API_KEY`
 (console.groq.com, sem cartão) no `.env`/Railway — `AI_PROVIDER=auto` já prioriza o Groq. (`/ai/diag` diagnostica.)
