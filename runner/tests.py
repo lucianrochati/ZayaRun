@@ -616,6 +616,42 @@ class ViewSmokeTests(TestCase):
         w.refresh_from_db()
         self.assertEqual(w.status, PlannedWorkout.STATUS_PLANNED)
 
+    def test_copilot_saves_and_caps_history(self):
+        """A Zaya guarda o histórico e mostra as últimas 5 conversas."""
+        from runner.models import CopilotChat
+
+        with self.settings(INSIGHT_PROVIDER="rules"):
+            self.client.post(reverse("copilot"), {"question": "Como está meu pace de 5 km?"})
+            self.assertEqual(CopilotChat.objects.filter(athlete=self.user).count(), 1)
+            resp = self.client.get(reverse("copilot"))
+        self.assertContains(resp, "Como está meu pace de 5 km?")  # aparece no histórico
+
+        for i in range(7):
+            CopilotChat.objects.create(athlete=self.user, question=f"Q{i}", answer="ok")
+        with self.settings(INSIGHT_PROVIDER="rules"):
+            resp = self.client.get(reverse("copilot"))
+        self.assertEqual(len(resp.context["history"]), 5)  # teto de 5
+
+    def test_multiple_plans_with_one_active(self):
+        """Atleta pode ter vários planos; só um ativo; dá para alternar."""
+        from runner.models import TrainingPlan
+
+        r1 = (timezone.localdate() + timedelta(days=56)).isoformat()
+        r2 = (timezone.localdate() + timedelta(days=70)).isoformat()
+        self.client.post(reverse("create_my_plan"), {"goal_distance_m": "10000", "race_date": r1})
+        self.client.post(reverse("create_my_plan"), {"goal_distance_m": "21097", "race_date": r2})
+        plans_qs = list(self.user.training_plans.order_by("created_at"))
+        self.assertEqual(len(plans_qs), 2)
+        p1, p2 = plans_qs
+        self.assertEqual(p1.status, TrainingPlan.STATUS_INACTIVE)  # antigo arquivado
+        self.assertEqual(p2.status, TrainingPlan.STATUS_ACTIVE)    # novo ativo
+        self.assertTrue(p1.workouts.exists())                      # treinos preservados
+
+        self.client.post(reverse("activate_plan", args=[p1.id]))   # volta pro p1
+        p1.refresh_from_db(); p2.refresh_from_db()
+        self.assertEqual(p1.status, TrainingPlan.STATUS_ACTIVE)
+        self.assertEqual(p2.status, TrainingPlan.STATUS_INACTIVE)
+
     def test_cannot_manage_others_workout(self):
         other = User.objects.create_user("intruso", password="x")
         w = PlannedWorkout.objects.create(
@@ -855,6 +891,56 @@ class CopilotContextTests(TestCase):
 
     def test_context_none_without_runs(self):
         self.assertIsNone(insights.build_copilot_context([]))
+
+
+class MultiPlanGatingTests(TestCase):
+    """Múltiplos planos: só o ATIVO conta no dia a dia (calendário + matching)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("gate", password="x")
+
+    def _plan(self, status, dist=10000, days=40):
+        from runner.models import TrainingPlan
+
+        return TrainingPlan.objects.create(
+            athlete=self.user, goal_distance_m=dist,
+            goal_race_date=timezone.localdate() + timedelta(days=days),
+            start_date=timezone.localdate(), status=status,
+        )
+
+    def test_live_filter_excludes_inactive_plan(self):
+        from runner.models import PlannedWorkout, TrainingPlan, live_planned_filter
+
+        active = self._plan(TrainingPlan.STATUS_ACTIVE)
+        inactive = self._plan(TrainingPlan.STATUS_INACTIVE, dist=21097, days=60)
+        d = timezone.localdate() + timedelta(days=1)
+        wa = PlannedWorkout.objects.create(athlete=self.user, plan=active, date=d, workout_type="easy")
+        wi = PlannedWorkout.objects.create(athlete=self.user, plan=inactive, date=d, workout_type="easy")
+        wad = PlannedWorkout.objects.create(athlete=self.user, date=d, workout_type="easy")  # avulso
+        ids = set(
+            PlannedWorkout.objects.filter(live_planned_filter(), athlete=self.user)
+            .values_list("id", flat=True)
+        )
+        self.assertIn(wa.id, ids)       # plano ativo
+        self.assertIn(wad.id, ids)      # avulso (sem plano)
+        self.assertNotIn(wi.id, ids)    # plano guardado fica de fora
+
+    def test_matching_ignores_inactive_plan(self):
+        from runner.models import Activity, PlannedWorkout, TrainingPlan
+        from runner.services import matching
+
+        inactive = self._plan(TrainingPlan.STATUS_INACTIVE)
+        when = timezone.now()
+        w = PlannedWorkout.objects.create(
+            athlete=self.user, plan=inactive, date=when.date(), workout_type="easy"
+        )
+        act = Activity.objects.create(
+            user=self.user, source=Activity.SOURCE_STRAVA, external_id="m1",
+            sport_type="Run", start_date=when, distance_m=5000, moving_time_s=1650,
+        )
+        self.assertIsNone(matching.match_activity_to_plan(act))  # não casa
+        w.refresh_from_db()
+        self.assertIsNone(w.matched_activity_id)
 
 
 class AIProviderTests(TestCase):

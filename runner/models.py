@@ -241,10 +241,12 @@ class TrainingPlan(models.Model):
     """Macrociclo: do estado atual ate uma prova-alvo, em semanas."""
 
     STATUS_ACTIVE = "active"
+    STATUS_INACTIVE = "inactive"
     STATUS_DONE = "completed"
     STATUS_CANCELLED = "cancelled"
     STATUS_CHOICES = [
         (STATUS_ACTIVE, "Ativo"),
+        (STATUS_INACTIVE, "Inativo"),
         (STATUS_DONE, "Concluído"),
         (STATUS_CANCELLED, "Cancelado"),
     ]
@@ -388,6 +390,14 @@ class PlannedWorkout(models.Model):
     def is_key_workout(self):
         """Treino-chave (quali): longão, ritmo, intervalado, prova."""
         return self.workout_type in ("long", "tempo", "interval", "fartlek", "race")
+
+
+def live_planned_filter():
+    """
+    Q dos treinos 'vivos' no calendário/painel: os do plano ATIVO ou avulsos
+    (sem plano). Treinos de planos inativos ficam guardados, mas fora do dia a dia.
+    """
+    return models.Q(plan__isnull=True) | models.Q(plan__status=TrainingPlan.STATUS_ACTIVE)
 
 
 class WorkoutFeedback(models.Model):
@@ -611,3 +621,22 @@ class Anamnese(models.Model):
     @property
     def has_risk_flags(self):
         return self.has_pain_now or bool((self.injury_history or "").strip())
+
+
+class CopilotChat(models.Model):
+    """Histórico das conversas do atleta com a Zaya (copiloto) — para consultar depois."""
+
+    athlete = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="copilot_chats",
+    )
+    question = models.TextField()
+    answer = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Zaya · {self.athlete.get_username()} · {self.created_at:%d/%m %H:%M}"

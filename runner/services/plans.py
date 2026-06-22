@@ -632,14 +632,21 @@ def generate_plan(activities, goal_distance_m, goal_race_date, start_date=None,
 def materialize_plan(athlete, spec, created_by=None, source=PlannedWorkout.SOURCE_AI,
                      generated_by=TrainingPlan.GEN_RULES, replace_future=True):
     """
-    Persiste a especificação: cria o TrainingPlan e os PlannedWorkout.
-    Por padrão remove treinos futuros ainda não realizados (re-planejamento).
+    Persiste a especificação: cria o TrainingPlan (ATIVO) e os PlannedWorkout.
+
+    O atleta pode ter VÁRIOS planos: o novo entra como ativo e os demais ativos
+    viram inativos (ficam guardados, fora do dia a dia — seus treinos NÃO são
+    apagados). `replace_future` limpa só os treinos AVULSOS futuros (sem plano).
     """
     meta = spec["meta"]
+    # Mantém só um plano ativo por atleta: arquiva os outros (sem apagar treinos).
+    TrainingPlan.objects.filter(
+        athlete=athlete, status=TrainingPlan.STATUS_ACTIVE
+    ).update(status=TrainingPlan.STATUS_INACTIVE)
     if replace_future:
         PlannedWorkout.objects.filter(
             athlete=athlete, date__gte=timezone.localdate(),
-            status=PlannedWorkout.STATUS_PLANNED,
+            status=PlannedWorkout.STATUS_PLANNED, plan__isnull=True,
         ).delete()
 
     plan = TrainingPlan.objects.create(

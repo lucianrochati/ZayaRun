@@ -54,7 +54,7 @@
 {% if plan %}
   <div class="card">
     <div class="card-head">
-      <h3>{{ plan.goal_label }}</h3>
+      <h3>{{ plan.goal_label }} <span class="pill pill-good">✓ Ativo</span></h3>
       <span class="pill pill-baixa">{{ plan.weeks_to_race }} semanas para a prova</span>
     </div>
     <div class="plan-summary">
@@ -81,9 +81,32 @@
   </div>
 {% endif %}
 
-<p class="section-label">{% if plan %}Recriar plano{% else %}Criar meu plano{% endif %}</p>
+{% if other_plans %}
+<p class="section-label">Outros planos</p>
 <div class="card">
-  {% if plan %}<p class="card-sub" style="margin-top:0">Recriar substitui os treinos futuros ainda não realizados, recalculando pela sua forma atual.</p>{% endif %}
+  <p class="card-sub" style="margin-top:0">Você pode ter vários planos guardados — só <b>um fica ativo</b> (o que aparece no painel e no calendário). Ative outro quando quiser trocar o foco.</p>
+  {% for p in other_plans %}
+  <div class="plan-row">
+    <div class="plan-row-info">
+      <b>{{ p.goal_label }}</b>
+      <span class="pill pill-{% if p.status == 'active' %}good{% else %}faint{% endif %}">{{ p.get_status_display }}</span>
+      <span class="muted small">· prova {{ p.goal_race_date|date:"d/m/Y" }}</span>
+    </div>
+    <div class="plan-row-actions">
+      <a class="btn btn-sm btn-ghost" href="{% url 'plan_detail' p.id %}">Ver</a>
+      <form action="{% url 'activate_plan' p.id %}" method="post" class="inline">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-primary" type="submit">Ativar</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<p class="section-label">Criar novo plano</p>
+<div class="card">
+  {% if plan %}<p class="card-sub" style="margin-top:0">O novo plano vira o <b>ativo</b> e recalcula pela sua forma atual; o atual fica guardado em “Outros planos” (não é apagado).</p>{% endif %}
   <form action="{% url 'create_my_plan' %}" method="post" class="form-grid" style="margin-top:8px">
     {% csrf_token %}
     <label class="field" style="margin:0"><span>Prova-alvo</span>
@@ -95,7 +118,7 @@
     <label class="field" style="margin:0"><span>Meta de tempo (opcional)</span>
       <input type="text" name="goal_time" placeholder="Ex.: 50:00"></label>
     <div class="field" style="margin:0;display:flex;align-items:flex-end">
-      <button class="btn btn-primary" type="submit">{% if plan %}Recriar plano{% else %}Gerar plano{% endif %}</button>
+      <button class="btn btn-primary" type="submit">{% if plan %}Criar novo plano{% else %}Gerar plano{% endif %}</button>
     </div>
   </form>
 </div>

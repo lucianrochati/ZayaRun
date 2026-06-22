@@ -20,11 +20,13 @@ from runner.models import (
     WORKOUT_TYPES,
     Anamnese,
     CoachAthlete,
+    CopilotChat,
     DailyCheckin,
     PlannedWorkout,
     Profile,
     TrainingPlan,
     WorkoutFeedback,
+    live_planned_filter,
 )
 from runner.services import ai, coaching, fitness, metrics, plans, wellness
 
@@ -111,7 +113,8 @@ def planned_week(athlete, ref_date=None):
     monday = ref - timedelta(days=ref.weekday())
     workouts = list(
         athlete.planned_workouts.filter(
-            date__range=(monday, monday + timedelta(days=6))
+            live_planned_filter(),
+            date__range=(monday, monday + timedelta(days=6)),
         ).select_related("matched_activity")
     )
     for w in workouts:
@@ -310,12 +313,17 @@ def _get_anamnese(athlete):
 @login_required
 def my_plan(request):
     plan = request.user.training_plans.filter(status=TrainingPlan.STATUS_ACTIVE).first()
+    # O atleta pode ter vários planos guardados; só um fica ATIVO (o que ele segue).
+    plans_all = list(request.user.training_plans.all())
+    others = [p for p in plans_all if p.id != (plan.id if plan else None)]
     upcoming = list(
-        request.user.planned_workouts.filter(date__gte=timezone.localdate())
-        .order_by("date")[:21]
+        request.user.planned_workouts.filter(
+            live_planned_filter(), date__gte=timezone.localdate()
+        ).order_by("date")[:21]
     )
     return render(request, "runner/plan.html", {
         "plan": plan,
+        "other_plans": others,
         "week": planned_week(request.user),
         "upcoming": upcoming,
         "race_choices": RACE_CHOICES,
@@ -386,9 +394,15 @@ def copilot(request):
         question = request.POST.get("question", "").strip()
         if question:
             answer = coaching.answer_question(request.user, question)
+            CopilotChat.objects.create(
+                athlete=request.user, question=question, answer=answer
+            )
+    # Histórico: as últimas 5 conversas com a Zaya (mais recente primeiro).
+    history = list(request.user.copilot_chats.all()[:5])
     return render(request, "runner/copilot.html", {
         "answer": answer,
         "question": question,
+        "history": history,
         "ai_enabled": ai.is_enabled(),
         "suggestions": [
             "Como está minha evolução de pace?",
@@ -502,6 +516,23 @@ def delete_plan(request, plan_id):
     if request.user == athlete:
         return redirect("my_plan")
     return redirect("coach_athlete", athlete_id=athlete.id)
+
+
+@login_required
+@require_POST
+def activate_plan(request, plan_id):
+    """Define este plano como o ATIVO (o que aparece no painel); os demais ficam guardados."""
+    plan = get_object_or_404(TrainingPlan, pk=plan_id)
+    athlete = plan.athlete
+    if not _can_manage(request.user, athlete):
+        raise Http404("Plano não encontrado.")
+    TrainingPlan.objects.filter(
+        athlete=athlete, status=TrainingPlan.STATUS_ACTIVE
+    ).exclude(pk=plan.pk).update(status=TrainingPlan.STATUS_INACTIVE)
+    plan.status = TrainingPlan.STATUS_ACTIVE
+    plan.save(update_fields=["status", "updated_at"])
+    messages.success(request, f"Plano “{plan.goal_label}” ativado — agora é ele que aparece no seu painel.")
+    return redirect("plan_detail", plan_id=plan.id)
 
 
 @login_required

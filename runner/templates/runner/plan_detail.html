@@ -13,9 +13,18 @@
 <div class="page-head">
   <div>
     <p class="eyebrow">Plano de prova{% if is_coach_view %} · {{ athlete_name }}{% endif %}</p>
-    <h1>{{ plan.goal_label }}</h1>
+    <h1>{{ plan.goal_label }}
+      {% if plan.status == 'active' %}<span class="pill pill-good">✓ Ativo</span>
+      {% else %}<span class="pill pill-faint">{{ plan.get_status_display }}</span>{% endif %}
+    </h1>
   </div>
   <div class="page-actions">
+    {% if plan.status != 'active' %}
+    <form action="{% url 'activate_plan' plan.id %}" method="post" class="inline">
+      {% csrf_token %}
+      <button class="btn btn-sm btn-primary" type="submit">✓ Ativar este plano</button>
+    </form>
+    {% endif %}
     <form action="{% url 'delete_plan' plan.id %}" method="post" class="inline"
           onsubmit="return confirm('Excluir este plano? Os treinos futuros serão removidos; os já realizados ficam no histórico.');">
       {% csrf_token %}

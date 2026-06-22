@@ -10,7 +10,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from runner.models import Activity, PlannedWorkout
+from runner.models import Activity, PlannedWorkout, live_planned_filter
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ def match_activity_to_plan(activity):
     day = timezone.localtime(activity.start_date).date()
     candidates = list(
         PlannedWorkout.objects.filter(
+            live_planned_filter(),  # só o plano ATIVO (ou avulsos); ignora planos guardados
             athlete=activity.user,
             date__range=(
                 day - timedelta(days=MATCH_WINDOW_DAYS),
@@ -75,6 +76,7 @@ def mark_missed_workouts(user):
     today = timezone.localdate()
     return (
         PlannedWorkout.objects.filter(
+            live_planned_filter(),  # não marca 'perdido' treino de plano guardado
             athlete=user,
             date__lt=today,
             status=PlannedWorkout.STATUS_PLANNED,

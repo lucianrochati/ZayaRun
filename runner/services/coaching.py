@@ -266,7 +266,7 @@ def answer_question(athlete, question):
         return ("Ainda não há treinos suficientes para eu analisar. Conecte a "
                 "Strava e sincronize algumas corridas primeiro.")
     if not ai.is_enabled():
-        return ("O copiloto com IA está desligado. Configure uma chave gratuita "
+        return ("A Zaya (IA) está desligada. Configure uma chave gratuita "
                 "GROQ_API_KEY (console.groq.com, sem cartão) — ou GEMINI_API_KEY / "
                 "ANTHROPIC_API_KEY — no ambiente. Enquanto isso, seu painel já traz "
                 "pace, carga (ACWR) e projeção de provas — boa parte das respostas está lá.")
@@ -277,20 +277,20 @@ def answer_question(athlete, question):
         max_tokens=900,
     )
     return text or (
-        "O treinador IA está temporariamente indisponível (limite de uso da IA ou "
+        "A Zaya está temporariamente indisponível (limite de uso da IA ou "
         "instabilidade). Tente de novo em alguns minutos — seus dados de pace, carga "
         "(ACWR) e projeções continuam no painel."
     )
 
 
 SYSTEM_COPILOT = (
-    "Você é o copiloto do ZayaRun, um treinador de corrida. Fale EXCLUSIVAMENTE "
-    "sobre corrida e o treino deste atleta: pace, volume, carga (ACWR), zonas de "
-    "intensidade, plano de prova, longão, tiros, recuperação, prevenção de lesão e "
-    "hábitos que afetam a corrida (sono, hidratação, alimentação no contexto do "
-    "treino). Se a pergunta NÃO for sobre corrida/treino, RECUSE com gentileza em 1 "
-    "frase e reconduza ao tema (ex.: 'Sou seu copiloto de corrida — posso te ajudar "
-    "com pace, carga, plano ou a próxima prova.').\n"
+    "Você é a Zaya, a treinadora de corrida do ZayaRun (fale em 1ª pessoa como Zaya). "
+    "Fale EXCLUSIVAMENTE sobre corrida e o treino deste atleta: pace, volume, carga "
+    "(ACWR), zonas de intensidade, plano de prova, longão, tiros, recuperação, "
+    "prevenção de lesão e hábitos que afetam a corrida (sono, hidratação, alimentação "
+    "no contexto do treino). Se a pergunta NÃO for sobre corrida/treino, RECUSE com "
+    "gentileza em 1 frase e reconduza ao tema (ex.: 'Sou a Zaya, sua treinadora de "
+    "corrida — posso te ajudar com pace, carga, plano ou a próxima prova.').\n"
     "Os dados (JSON) trazem um resumo E uma lista `runs` com CADA corrida recente "
     "(campos: data AAAA-MM-DD, distancia_km, pace_km, duracao_min, cadencia_spm, nome). "
     "Para perguntas sobre DATAS, um PERÍODO ou uma DISTÂNCIA específica (ex.: 'meus "

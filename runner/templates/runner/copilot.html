@@ -1,16 +1,16 @@
 {% extends "runner/base.html" %}
-{% block title %}Copiloto · ZayaRun{% endblock %}
+{% block title %}Fale com a Zaya · ZayaRun{% endblock %}
 {% block content %}
 
-<div class="page-head"><div><p class="eyebrow">Copiloto</p><h1>Pergunte ao seu treinador IA</h1></div></div>
+<div class="page-head"><div><p class="eyebrow">Sua treinadora IA</p><h1>Fale com a Zaya</h1></div></div>
 
 {% if not ai_enabled %}
-  <div class="note-soft">O copiloto com IA precisa de uma chave gratuita <code>GROQ_API_KEY</code>
+  <div class="note-soft">A Zaya (IA) precisa de uma chave gratuita <code>GROQ_API_KEY</code>
     (console.groq.com, sem cartão) — ou <code>GEMINI_API_KEY</code> / <code>ANTHROPIC_API_KEY</code> — no ambiente.
-    Sem ela, ele responde apontando para os dados do seu painel.</div>
+    Sem ela, ela responde apontando para os dados do seu painel.</div>
 {% endif %}
 
-<p class="card-sub" style="margin:0 0 10px 4px">💬 Falo <b>só de corrida</b>: pace, carga, zonas, plano e provas — sempre com base nos seus dados.</p>
+<p class="card-sub" style="margin:0 0 10px 4px">💬 A Zaya fala <b>só de corrida</b>: pace, carga, zonas, plano e provas — sempre com base nos seus dados.</p>
 
 <div class="card">
   <form action="{% url 'copilot' %}" method="post" id="copilotForm">
@@ -23,15 +23,21 @@
     <button class="btn btn-primary" type="submit">Perguntar</button>
   </form>
 
-  {% if question %}
-    <div class="bubble bubble-user">{{ question }}</div>
-  {% endif %}
-  {% if answer %}
-    <div class="bubble bubble-ai"><b>Copiloto:</b> {{ answer|linebreaksbr }}</div>
+  {% if history %}
+    <p class="section-label" style="margin:14px 4px 6px">Últimas conversas</p>
+    <div class="chat-history">
+      {% for c in history %}
+        <div class="chat-turn">
+          <div class="bubble bubble-user">{{ c.question }}</div>
+          <div class="bubble bubble-ai"><b>Zaya:</b> {{ c.answer|linebreaksbr }}</div>
+          <span class="chat-when">{{ c.created_at|date:"d/m H:i" }}</span>
+        </div>
+      {% endfor %}
+    </div>
   {% endif %}
 </div>
 
-<p class="card-sub" style="margin-left:4px">O copiloto analisa <b>apenas os seus dados</b> (pace, volume, carga, projeções). Ele não inventa números.</p>
+<p class="card-sub" style="margin-left:4px">A Zaya analisa <b>apenas os seus dados</b> (pace, volume, carga, projeções). Ela não inventa números. Guardo as suas <b>últimas 5 conversas</b> aqui para consultar.</p>
 {% endblock %}
 
 {% block scripts %}

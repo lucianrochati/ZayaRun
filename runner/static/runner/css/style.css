@@ -139,6 +139,8 @@ h3{font-size:15px}
 .pill-ideal{color:var(--good);background:rgba(54,211,153,.14);border-color:rgba(54,211,153,.3)}
 .pill-atencao{color:var(--warn);background:rgba(251,191,36,.14);border-color:rgba(251,191,36,.3)}
 .pill-risco{color:var(--bad);background:rgba(248,113,113,.14);border-color:rgba(248,113,113,.3)}
+.pill-good{color:var(--good);background:rgba(54,211,153,.14);border-color:rgba(54,211,153,.3)}
+.pill-faint{color:var(--faint);background:rgba(94,107,130,.16);border-color:rgba(94,107,130,.34)}
 .acwr-baixa{color:var(--info)} .acwr-ideal{color:var(--good)}
 .acwr-atencao{color:var(--warn)} .acwr-risco{color:var(--bad)}
 .meter{height:6px;border-radius:var(--r-pill);background:var(--surface-3);margin:12px 0 6px;overflow:hidden}
@@ -336,6 +338,18 @@ textarea{resize:vertical;min-height:70px}
 .bubble-ai{background:linear-gradient(180deg,rgba(255,90,54,.07),var(--surface) 70%);
   border:1px solid var(--border);border-left:4px solid var(--brand)}
 .bubble-ai b{color:var(--brand-2)}
+.chat-history{margin-top:6px}
+.chat-turn{padding:8px 0;border-top:1px solid var(--border)}
+.chat-turn:first-child{border-top:none}
+.chat-turn .bubble{margin:6px 0}
+.chat-when{display:block;font-size:11px;color:var(--faint);text-align:right;margin-top:2px}
+
+/* ---------- Múltiplos planos (lista) ---------- */
+.plan-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:10px 0;border-top:1px solid var(--border)}
+.plan-row:first-of-type{border-top:none}
+.plan-row-info{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.plan-row-actions{display:flex;align-items:center;gap:8px;flex:none}
 
 /* ---------- Plano: resumo ---------- */
 .plan-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
