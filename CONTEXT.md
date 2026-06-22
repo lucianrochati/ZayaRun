@@ -45,7 +45,7 @@ orientação prescritiva, de forma simples e acessível, em português.
 - **Compliance Strava:** ao desconectar, purga atividades + perfil (exigência dos termos).
 - **Navegação:** bottom nav (Painel / Plano / Copiloto / Treinador).
 - **Deploy:** no ar no **Railway** (Postgres). `railway.json` roda migrate/collectstatic/createsu/gunicorn; `runtime.txt` em 3.12.10 (fix mise). `seed_demo` popula treinador/atleta demo.
-- **Testes:** 94 passando (`python manage.py test`).
+- **Testes:** 96 passando (`python manage.py test`).
 - Deploy preparado para **Heroku** (`app.json`, `Procfile`) e **Render** (`render.yaml`, `build.sh`).
 
 ## 4. Arquitetura / arquivos importantes
@@ -163,7 +163,11 @@ python manage.py runserver
     registra o "mantive meu treino" — que vira **sinal de consciência** (`_declined_signal`: "só insista em sinal forte").
     UI: card "A Zaya sugere" (Aceitar/Manter) + seletor "Como a Zaya age comigo" no `plan.html`; views
     `resolve_suggestion`/`set_zaya_autonomy`. ⚠️ NÃO ligar o "treino de hoje" diário sem este modelo de consentimento.
-   Testes: **94 passando** (sugerir-padrão, aceitar, manter, auto, off, consciência de decisões).
+15. **Propósito do treino + Planejado × Realizado.** Cada treino mostra **"Por que este treino"** — explicação real
+    de treinador (`plans.WORKOUT_PURPOSE`/`workout_purpose()`, anexada em `_plan_weeks`/`planned_week`). E cada card
+    exibe **Planejado X km × Realizado Y km** (Y vem do `matched_activity` da Strava, casado por data). No
+    `plan_detail` e no card da semana (`_planned_week.html`).
+   Testes: **96 passando**.
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
@@ -190,7 +194,7 @@ python manage.py runserver
 
 ## 10. Como retomar
 Branch `claude/zayarun-app-design-4rsvdl`. Rodar testes (`.\.venv\Scripts\python.exe manage.py test`) para confirmar
-baseline (**94 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
+baseline (**96 OK**). Os 2 bugs prioritários + zonas/linguagem e as melhorias novas (concluir treino, gráfico de
 evolução, pace/zona calibrados, Zaya c/ histórico, múltiplos planos, PWA instalável) **já foram entregues** (seção 8).
 Próximo passo: ver "Próximos passos" abaixo (host de produção / Play). Para ligar a IA grátis: setar `GROQ_API_KEY`
 (console.groq.com, sem cartão) no `.env`/Railway — `AI_PROVIDER=auto` já prioriza o Groq. (`/ai/diag` diagnostica.)
