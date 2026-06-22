@@ -943,6 +943,81 @@ class MultiPlanGatingTests(TestCase):
         self.assertIsNone(w.matched_activity_id)
 
 
+class AutoregTests(TestCase):
+    """Autorregulação: feedback negativo revê os próximos treinos do plano ativo."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("auto", password="x")
+
+    def _plan_with_upcoming(self):
+        from runner.models import PlannedWorkout, TrainingPlan
+
+        plan = TrainingPlan.objects.create(
+            athlete=self.user, goal_distance_m=10000,
+            goal_race_date=timezone.localdate() + timedelta(days=40),
+            start_date=timezone.localdate(), status=TrainingPlan.STATUS_ACTIVE,
+        )
+        d = timezone.localdate()
+        hard = PlannedWorkout.objects.create(
+            athlete=self.user, plan=plan, date=d + timedelta(days=1),
+            workout_type="interval", title="Intervalado 5x1000 m", target_distance_m=8000,
+        )
+        easy = PlannedWorkout.objects.create(
+            athlete=self.user, plan=plan, date=d + timedelta(days=2),
+            workout_type="easy", title="Rodagem 6 km", target_distance_m=6000,
+        )
+        return plan, hard, easy
+
+    def test_negative_feedback_reduces_and_softens(self):
+        from runner.models import WorkoutFeedback
+        from runner.services import autoreg
+
+        plan, hard, easy = self._plan_with_upcoming()
+        fb = WorkoutFeedback.objects.create(
+            athlete=self.user, date=timezone.localdate(), rpe=9, feeling="bad", soreness=4,
+        )
+        adj = autoreg.autoregulate(self.user, fb, None)
+        self.assertEqual(adj["level"], "reduce")
+        self.assertGreaterEqual(adj["changed"], 2)
+        self.assertTrue(adj["softened"])
+        hard.refresh_from_db(); easy.refresh_from_db()
+        self.assertEqual(hard.workout_type, "easy")        # forte virou leve
+        self.assertLess(hard.target_distance_m, 8000)      # distância reduzida
+        self.assertLess(easy.target_distance_m, 6000)
+        self.assertIn("Ajuste Zaya", easy.description)
+        plan.refresh_from_db()
+        self.assertIn("avaliação", plan.notes.lower())     # dor alta → recomenda profissional
+
+    def test_positive_feedback_changes_nothing(self):
+        from runner.models import WorkoutFeedback
+        from runner.services import autoreg
+
+        plan, hard, easy = self._plan_with_upcoming()
+        fb = WorkoutFeedback.objects.create(
+            athlete=self.user, date=timezone.localdate(), rpe=4, feeling="good", soreness=1,
+        )
+        adj = autoreg.autoregulate(self.user, fb, None)
+        self.assertEqual(adj["level"], "none")
+        self.assertEqual(adj["changed"], 0)
+        hard.refresh_from_db()
+        self.assertEqual(hard.workout_type, "interval")    # intacto
+
+    def test_idempotent_does_not_compound(self):
+        from runner.models import WorkoutFeedback
+        from runner.services import autoreg
+
+        plan, hard, easy = self._plan_with_upcoming()
+        fb = WorkoutFeedback.objects.create(
+            athlete=self.user, date=timezone.localdate(), rpe=9, feeling="bad", soreness=4,
+        )
+        autoreg.autoregulate(self.user, fb, None)
+        easy.refresh_from_db()
+        km1 = easy.target_distance_m
+        autoreg.autoregulate(self.user, fb, None)          # roda de novo
+        easy.refresh_from_db()
+        self.assertEqual(easy.target_distance_m, km1)      # não reduz em cima do reduzido
+
+
 class AIProviderTests(TestCase):
     """Resolução de provedor de IA (gratuitos Groq > Gemini > Claude > regras)."""
 

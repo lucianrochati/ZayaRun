@@ -28,7 +28,7 @@ from runner.models import (
     WorkoutFeedback,
     live_planned_filter,
 )
-from runner.services import ai, coaching, fitness, metrics, plans, wellness
+from runner.services import ai, autoreg, coaching, fitness, metrics, plans, wellness
 
 logger = logging.getLogger(__name__)
 
@@ -351,7 +351,7 @@ def create_my_plan(request):
 @require_POST
 def workout_feedback(request, planned_id):
     planned = get_object_or_404(PlannedWorkout, pk=planned_id, athlete=request.user)
-    WorkoutFeedback.objects.update_or_create(
+    feedback, _ = WorkoutFeedback.objects.update_or_create(
         planned_workout=planned,
         defaults={
             "athlete": request.user,
@@ -364,6 +364,13 @@ def workout_feedback(request, planned_id):
         },
     )
     messages.success(request, "Feedback registrado — isso calibra seus próximos treinos.")
+    # Autorregulação: feedback negativo → revê os próximos treinos do plano ativo.
+    try:
+        adj = autoreg.autoregulate(request.user, feedback, planned)
+        if adj["changed"]:
+            messages.warning(request, "Zaya: " + adj["summary"])
+    except Exception:  # noqa: BLE001 — ajuste nunca pode quebrar o registro do feedback
+        logger.exception("Falha na autorregulação após feedback")
     return redirect(request.POST.get("next") or "my_plan")
 
 
