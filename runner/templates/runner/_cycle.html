@@ -1,0 +1,123 @@
+{% comment %}
+Ciclo menstrual — PRIVADO da atleta. Nada aqui aparece pro treinador.
+Contexto: cycle_profile, cycle_phase, cycle_guidance, cycle_symptom, cycle_red_s.
+A Zaya SEMPRE pergunta (nunca decreta) e tira a culpa do dia que não rola.
+{% endcomment %}
+
+{% if cycle_red_s %}
+<div class="card" style="border-left:3px solid var(--warn)">
+  <div class="card-head"><h3>💛 {{ cycle_red_s.title }}</h3></div>
+  <p class="insight-text">{{ cycle_red_s.message }}</p>
+</div>
+{% endif %}
+
+{% if not cycle_profile or not cycle_profile.enabled %}
+  <details class="add-details">
+    <summary class="btn btn-sm btn-ghost" style="display:inline-flex">🌙 Se você menstrua, a Zaya pode te ajudar no ciclo</summary>
+    <div class="card" style="margin-top:10px">
+      <p class="card-sub" style="margin-top:0">Treinar <b>com</b> o seu corpo. A Zaya passa a considerar seu ciclo pra
+        <b>sugerir</b> (nunca obrigar) quando pegar leve, quando é boa fase pra um treino forte — e pra tirar a culpa do dia que não rola.</p>
+      <p class="card-sub" style="color:var(--good)">🔒 100% privado: fica só com você, seu treinador <b>não vê</b>. Dá pra desligar quando quiser.</p>
+      <form action="{% url 'cycle_setup' %}" method="post" class="form-grid" style="margin-top:8px">
+        {% csrf_token %}
+        <label class="field" style="margin:0"><span>Início da última menstruação</span>
+          <input type="date" name="last_period_start"></label>
+        <label class="field" style="margin:0"><span>Duração média do ciclo (dias)</span>
+          <input type="number" name="avg_cycle_length" min="18" max="45" value="28"></label>
+        <label class="field" style="margin:0"><span>Dias de menstruação</span>
+          <input type="number" name="avg_period_length" min="2" max="10" value="5"></label>
+        <label class="feel-opt" style="flex:none;text-align:left;display:flex;align-items:center;gap:8px;margin:0">
+          <input type="checkbox" name="on_contraception"> Uso anticoncepcional hormonal</label>
+        <div class="field-full"><button class="btn btn-primary" type="submit">Ativar (privado)</button></div>
+      </form>
+    </div>
+  </details>
+{% else %}
+  {% if cycle_guidance %}
+  <div class="card zaya-suggest" style="border-left:3px solid var(--brand)">
+    <div class="card-head"><h3>💗 {{ cycle_guidance.title }}</h3><span class="pill pill-atencao">você decide</span></div>
+    <p class="insight-text">{{ cycle_guidance.message }}</p>
+    {% if cycle_guidance.kind == 'offer' or cycle_guidance.kind == 'checkin' %}
+    <div class="suggest-actions">
+      <form action="{% url 'cycle_action' %}" method="post" class="inline">{% csrf_token %}
+        <input type="hidden" name="action" value="bem"><button class="btn btn-sm btn-primary">Tô bem, bora 💪</button></form>
+      <form action="{% url 'cycle_action' %}" method="post" class="inline">{% csrf_token %}
+        <input type="hidden" name="action" value="adapta"><button class="btn btn-sm btn-ghost">Tá pesado, adapta</button></form>
+      <form action="{% url 'cycle_action' %}" method="post" class="inline">{% csrf_token %}
+        <input type="hidden" name="action" value="folga"><button class="btn btn-sm btn-ghost">Hoje não</button></form>
+    </div>
+    {% endif %}
+    <p class="card-sub" style="margin:6px 0 0;color:var(--faint)">Você manda. A Zaya só pergunta — e respeita sua decisão.</p>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-head">
+      <h3>🌙 Seu ciclo</h3>
+      {% if cycle_phase.predicted %}<span class="pill pill-{% if cycle_phase.is_heavier %}atencao{% elif cycle_phase.is_strong %}good{% else %}baixa{% endif %}">{{ cycle_phase.label }}{% if cycle_phase.day %} · dia {{ cycle_phase.day }}{% endif %}</span>
+      {% elif cycle_phase.on_contraception %}<span class="pill pill-baixa">anticoncepcional</span>{% endif %}
+    </div>
+    {% if cycle_phase.predicted %}
+      <p class="card-sub" style="margin-top:0">Estimativa — vale pela sua sensação{% if cycle_phase.overdue %} · menstruação já prevista, registre quando começar{% elif cycle_phase.days_to_next %} · ~{{ cycle_phase.days_to_next }} dias pra próxima{% endif %}.</p>
+    {% elif cycle_phase.on_contraception %}
+      <p class="card-sub" style="margin-top:0">Com anticoncepcional o ciclo é mais estável — a Zaya vai pela sua sensação, sem prever fase.</p>
+    {% else %}
+      <p class="card-sub" style="margin-top:0">Registre o início da sua menstruação pra Zaya começar a entender o seu ciclo.</p>
+    {% endif %}
+
+    <form action="{% url 'cycle_log' %}" method="post" class="form-grid" style="margin-top:8px">
+      {% csrf_token %}
+      <label class="field" style="margin:0"><span>Energia hoje (1–5)</span>
+        <input type="number" name="energy" min="1" max="5" {% if cycle_symptom.energy %}value="{{ cycle_symptom.energy }}"{% endif %}></label>
+      <label class="field" style="margin:0"><span>Fluxo (0 nada – 3 intenso)</span>
+        <input type="number" name="flow" min="0" max="3" {% if cycle_symptom.flow is not None %}value="{{ cycle_symptom.flow }}"{% endif %}></label>
+      <div class="field-full">
+        <span class="card-sub" style="margin:0">Sintomas (opcional)</span>
+        <div class="feel-row" style="flex-wrap:wrap;gap:6px;margin-top:4px">
+          {% for val, lab in cycle_symptom_options %}
+          <label class="feel-opt" style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 9px">
+            <input type="checkbox" name="symptoms" value="{{ val }}" {% if val in cycle_symptom.symptoms %}checked{% endif %}> {{ lab }}</label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="field-full" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-sm btn-primary" type="submit" name="save" value="1">Salvar como estou</button>
+        <button class="btn btn-sm btn-ghost" type="submit" name="period_started" value="1">🩸 Comecei a menstruar hoje</button>
+      </div>
+    </form>
+
+    {% if cycle_outlook %}
+    <div style="margin-top:10px">
+      <span class="card-sub" style="margin:0">Próximas semanas (estimativa):</span>
+      <div class="feel-row" style="flex-wrap:wrap;gap:6px;margin-top:4px">
+        {% for o in cycle_outlook %}
+        <span class="pill pill-{% if o.tag == 'forte' %}good{% elif o.tag == 'leve' %}atencao{% else %}baixa{% endif %}"
+              title="{{ o.hint }} (confiança {{ o.confidence }})">{{ o.week_of|date:"d/m" }} · {{ o.label }}</span>
+        {% endfor %}
+      </div>
+      <p class="card-sub" style="margin:4px 0 0;color:var(--faint)">Só uma estimativa pra você se planejar — quanto mais longe, menos certa. Você decide no dia.</p>
+    </div>
+    {% endif %}
+
+    <details class="add-details" style="margin-top:6px">
+      <summary class="btn btn-sm btn-ghost" style="display:inline-flex">⚙️ Ajustes & privacidade</summary>
+      <div class="card" style="margin-top:8px">
+        <form action="{% url 'cycle_setup' %}" method="post" class="form-grid">
+          {% csrf_token %}
+          <label class="field" style="margin:0"><span>Duração média do ciclo</span>
+            <input type="number" name="avg_cycle_length" min="18" max="45" value="{{ cycle_profile.avg_cycle_length }}"></label>
+          <label class="field" style="margin:0"><span>Dias de menstruação</span>
+            <input type="number" name="avg_period_length" min="2" max="10" value="{{ cycle_profile.avg_period_length }}"></label>
+          <label class="feel-opt" style="flex:none;text-align:left;display:flex;align-items:center;gap:8px;margin:0">
+            <input type="checkbox" name="on_contraception" {% if cycle_profile.on_contraception %}checked{% endif %}> Uso anticoncepcional hormonal</label>
+          <div class="field-full"><button class="btn btn-sm btn-primary" type="submit">Salvar ajustes</button></div>
+        </form>
+        <form action="{% url 'cycle_setup' %}" method="post" style="margin-top:8px">
+          {% csrf_token %}<input type="hidden" name="action" value="disable">
+          <button class="btn btn-sm btn-ghost" type="submit">Desligar acompanhamento</button>
+        </form>
+        <p class="card-sub" style="margin:8px 0 0;color:var(--good)">🔒 Privado — seu treinador não vê nada disto.</p>
+      </div>
+    </details>
+  </div>
+{% endif %}

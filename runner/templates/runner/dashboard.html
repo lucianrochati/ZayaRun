@@ -2,6 +2,24 @@
 {% block title %}Meu painel · ZayaRun{% endblock %}
 {% block content %}
 
+{% if sex_confirm_needed %}
+<div class="card" style="border-left:3px solid var(--brand)">
+  <div class="card-head"><h3>Confirma pra personalizar seu treino</h3></div>
+  <p class="card-sub" style="margin-top:0">Você é mulher ou homem? Isso ajusta os treinos e libera recursos específicos pro seu corpo.</p>
+  <div class="suggest-actions">
+    <form action="{% url 'confirm_sex' %}" method="post" class="inline">{% csrf_token %}
+      <input type="hidden" name="next" value="{% url 'dashboard' %}">
+      <button class="btn btn-sm {% if sex_hint == 'F' %}btn-primary{% else %}btn-ghost{% endif %}" name="sex" value="F">Mulher</button>
+    </form>
+    <form action="{% url 'confirm_sex' %}" method="post" class="inline">{% csrf_token %}
+      <input type="hidden" name="next" value="{% url 'dashboard' %}">
+      <button class="btn btn-sm {% if sex_hint == 'M' %}btn-primary{% else %}btn-ghost{% endif %}" name="sex" value="M">Homem</button>
+    </form>
+  </div>
+  {% if sex_hint %}<p class="card-sub" style="margin:6px 0 0;color:var(--faint)">Sugerido pela sua conta da Strava — confirme ou corrija.</p>{% endif %}
+</div>
+{% endif %}
+
 {% if not has_strava %}
   <div class="card hero">
     <svg class="hero-mark"><use href="#zaya-mark"/></svg>

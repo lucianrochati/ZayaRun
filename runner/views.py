@@ -109,9 +109,13 @@ def dashboard(request):
     )
     needs_feedback = [w for w in done_recent if w.pk not in with_feedback]
 
+    profile = getattr(request.user, "profile", None)
     context = {
         "coach_link": coach_link,
-        "is_coach": getattr(getattr(request.user, "profile", None), "is_coach", False),
+        "is_coach": getattr(profile, "is_coach", False),
+        # Confirmação de sexo no login (pré-marca a dica vinda da Strava).
+        "sex_confirm_needed": bool(profile and not profile.sex_confirmed),
+        "sex_hint": getattr(profile, "sex", ""),
         "week_plan": week_plan,
         "today_workouts": today_workouts,
         "needs_feedback": needs_feedback,

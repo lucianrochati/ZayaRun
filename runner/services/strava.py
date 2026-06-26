@@ -85,7 +85,23 @@ def save_token(user, data):
             "scope": data.get("scope", ""),
         },
     )
+    _capture_sex_hint(user, athlete.get("sex"))
     return token
+
+
+def _capture_sex_hint(user, sex):
+    """
+    Guarda o sexo da Strava como DICA pré-marcada na confirmação do login.
+    Nunca sobrescreve o que a pessoa já confirmou (a confirmação manda).
+    """
+    if sex not in ("M", "F"):
+        return
+    from runner.models import Profile
+
+    prof, _ = Profile.objects.get_or_create(user=user)
+    if not prof.sex_confirmed:
+        prof.sex = sex
+        prof.save(update_fields=["sex"])
 
 
 def exchange_code_for_token(user, code):

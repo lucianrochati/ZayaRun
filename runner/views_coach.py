@@ -22,6 +22,9 @@ from runner.models import (
     CoachAthlete,
     CoachSuggestion,
     CopilotChat,
+    CycleEvent,
+    CycleProfile,
+    CycleSymptom,
     DailyCheckin,
     PlannedWorkout,
     Profile,
@@ -29,7 +32,7 @@ from runner.models import (
     WorkoutFeedback,
     live_planned_filter,
 )
-from runner.services import ai, autoreg, coaching, fitness, metrics, plans, wellness
+from runner.services import ai, autoreg, coaching, cycle, fitness, metrics, plans, wellness
 
 logger = logging.getLogger(__name__)
 
@@ -318,26 +321,44 @@ def my_plan(request):
     # O atleta pode ter vários planos guardados; só um fica ATIVO (o que ele segue).
     plans_all = list(request.user.training_plans.all())
     others = [p for p in plans_all if p.id != (plan.id if plan else None)]
+    today = timezone.localdate()
     upcoming = list(
         request.user.planned_workouts.filter(
-            live_planned_filter(), date__gte=timezone.localdate()
+            live_planned_filter(), date__gte=today
         ).order_by("date")[:21]
     )
+    week = planned_week(request.user)
+    # Ciclo menstrual: PRIVADO da atleta e SÓ pra mulheres (sex == F).
+    is_female = get_profile(request.user).is_female
+    cyc = cycle.get_profile(request.user) if is_female else None
+    cyc_on = bool(cyc and cyc.enabled)
+    todays = [w for w in week["workouts"] if w.date == today]
     return render(request, "runner/plan.html", {
         "plan": plan,
         "other_plans": others,
-        "week": planned_week(request.user),
+        "week": week,
         "upcoming": upcoming,
         "race_choices": RACE_CHOICES,
         "fitness": fitness.update_profile(request.user),
         "anamnese": _get_anamnese(request.user),
-        "readiness": wellness.readiness(request.user),
+        "readiness": wellness.readiness(request.user, include_private=True),
         "today_checkin": DailyCheckin.objects.filter(
-            athlete=request.user, date=timezone.localdate()
+            athlete=request.user, date=today
         ).first(),
         "zaya_suggestion": autoreg.pending_suggestion(request.user),
         "autonomy": get_profile(request.user).coach_autonomy,
         "autonomy_choices": Profile.AUTONOMY_CHOICES,
+        # Ciclo: perfil, fase prevista, oferta do dia, sintoma de hoje, nudge saúde.
+        "cycle_profile": cyc,
+        "cycle_phase": cycle.phase_for(request.user, profile=cyc) if cyc_on else None,
+        "cycle_guidance": cycle.guidance(
+            request.user, todays[0] if todays else None
+        ) if cyc_on else None,
+        "cycle_symptom": cycle.todays_symptom(request.user) if cyc_on else None,
+        "cycle_red_s": cycle.red_s_flag(request.user, cyc),
+        "cycle_symptom_options": cycle.SYMPTOM_OPTIONS,
+        "cycle_outlook": cycle.upcoming_phase_outlook(request.user, profile=cyc) if cyc_on else [],
+        "show_cycle": is_female,
     })
 
 
@@ -412,6 +433,20 @@ def set_zaya_autonomy(request):
 
 @login_required
 @require_POST
+def confirm_sex(request):
+    """Confirma o sexo (mulher/homem) no login — personaliza e libera recursos."""
+    value = request.POST.get("sex")
+    if value in dict(Profile.SEX_CHOICES):
+        prof = get_profile(request.user)
+        prof.sex = value
+        prof.sex_confirmed = True
+        prof.save(update_fields=["sex", "sex_confirmed"])
+        messages.success(request, "Pronto — ajustei o ZayaRun pra você.")
+    return redirect(request.POST.get("next") or "dashboard")
+
+
+@login_required
+@require_POST
 def daily_checkin(request):
     DailyCheckin.objects.update_or_create(
         athlete=request.user,
@@ -427,6 +462,78 @@ def daily_checkin(request):
     )
     messages.success(request, "Check-in do dia salvo.")
     return redirect("dashboard")
+
+
+# --------------------------------------------------------------------------
+# Ciclo menstrual — PRIVADO da atleta. Todas as views abaixo são athlete-only:
+# nada daqui aparece pro treinador, e a Zaya SEMPRE pergunta (nunca decreta).
+# --------------------------------------------------------------------------
+@login_required
+@require_POST
+def cycle_setup(request):
+    """Liga/desliga o acompanhamento de ciclo e salva as configs. Privado."""
+    prof, _ = CycleProfile.objects.get_or_create(athlete=request.user)
+    if request.POST.get("action") == "disable":
+        prof.enabled = False
+        prof.save(update_fields=["enabled", "updated_at"])
+        messages.info(request, "Acompanhamento de ciclo desligado. Seus dados continuam seus.")
+        return redirect("my_plan")
+    prof.enabled = True
+    prof.on_contraception = bool(request.POST.get("on_contraception"))
+    prof.avg_cycle_length = _to_int(request.POST.get("avg_cycle_length")) or prof.avg_cycle_length or 28
+    prof.avg_period_length = _to_int(request.POST.get("avg_period_length")) or prof.avg_period_length or 5
+    prof.save()
+    start = _parse_date(request.POST.get("last_period_start"))
+    if start:
+        CycleEvent.objects.get_or_create(athlete=request.user, start_date=start)
+    messages.success(request, "Pronto — a Zaya vai considerar seu ciclo, de forma privada. Só você vê.")
+    return redirect("my_plan")
+
+
+@login_required
+@require_POST
+def cycle_log(request):
+    """Registro diário do ciclo (energia/fluxo/sintomas) e/ou 'comecei hoje'."""
+    today = timezone.localdate()
+    if request.POST.get("period_started"):
+        CycleEvent.objects.get_or_create(athlete=request.user, start_date=today)
+        messages.success(request, "Anotei o início da menstruação. Cuida de você. 💗")
+    energy = _to_int(request.POST.get("energy"))
+    flow = _to_int(request.POST.get("flow"))
+    symptoms = request.POST.getlist("symptoms")
+    if energy is not None or flow is not None or symptoms:
+        CycleSymptom.objects.update_or_create(
+            athlete=request.user, date=today,
+            defaults={"energy": energy, "flow": flow, "symptoms": symptoms},
+        )
+        messages.success(request, "Registrado — isso ajuda a Zaya a entender o SEU padrão.")
+    return redirect("my_plan")
+
+
+@login_required
+@require_POST
+def cycle_action(request):
+    """Resposta da atleta à oferta da Zaya: tô bem / adapta / hoje não."""
+    action = request.POST.get("action")
+    today = timezone.localdate()
+    if action == "bem":
+        CycleSymptom.objects.update_or_create(
+            athlete=request.user, date=today, defaults={"energy": 4},
+        )
+        messages.success(request, "Boa! Bora então. 💪 Sente o corpo durante a corrida.")
+    elif action == "adapta":
+        n = cycle.soften_today(request.user)
+        CycleSymptom.objects.update_or_create(
+            athlete=request.user, date=today, defaults={"energy": 2},
+        )
+        if n:
+            messages.success(request, "Deixei o treino de hoje mais leve. Sem culpa — fácil também é treino. 💗")
+        else:
+            messages.info(request, "Não havia treino-chave hoje pra adaptar — vai no seu ritmo. 💗")
+    elif action == "folga":
+        cycle.skip_today(request.user)
+        messages.info(request, "Folga marcada. Descansar no dia certo também é treinar. 💗")
+    return redirect("my_plan")
 
 
 @login_required

@@ -1382,3 +1382,268 @@ class PWATests(TestCase):
         resp = Client().get(reverse("login"))
         self.assertContains(resp, "pwaInstall")          # banner existe
         self.assertContains(resp, "/sw.js")              # registro do SW
+
+
+@override_settings(STORAGES={
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+})
+class CycleAwareTests(TestCase):
+    """Treino ciente do ciclo — PRIVADO da atleta, sempre pergunta (nunca decreta)."""
+
+    def setUp(self):
+        from runner.models import CycleProfile, Profile
+
+        self.user = User.objects.create_user("ciclista", password="x")
+        Profile.objects.create(
+            user=self.user, sex=Profile.SEX_FEMALE, sex_confirmed=True,
+        )
+        self.prof = CycleProfile.objects.create(
+            athlete=self.user, enabled=True, avg_cycle_length=28, avg_period_length=5,
+        )
+
+    def _period(self, days_ago):
+        from runner.models import CycleEvent
+
+        return CycleEvent.objects.create(
+            athlete=self.user,
+            start_date=timezone.localdate() - timedelta(days=days_ago),
+        )
+
+    # --- Previsão de fase ---
+    def test_phase_menstrual_then_follicular(self):
+        from runner.services import cycle
+
+        self._period(2)  # começou há 2 dias -> hoje é dia 3
+        ph = cycle.phase_for(self.user)
+        self.assertEqual(ph["phase"], "menstrual")
+        self.assertEqual(ph["day"], 3)
+        later = cycle.phase_for(self.user, on_date=timezone.localdate() + timedelta(days=8))
+        self.assertEqual(later["phase"], "follicular")
+
+    def test_contraception_disables_phase(self):
+        from runner.services import cycle
+
+        self._period(2)
+        self.prof.on_contraception = True
+        self.prof.save()
+        ph = cycle.phase_for(self.user)
+        self.assertIsNone(ph["phase"])
+        self.assertTrue(ph["on_contraception"])
+
+    def test_no_event_or_disabled_gives_no_phase(self):
+        from runner.services import cycle
+
+        self.assertIsNone(cycle.phase_for(self.user))  # sem registro
+        self._period(2)
+        self.prof.enabled = False
+        self.prof.save()
+        self.assertIsNone(cycle.phase_for(self.user))  # sem opt-in
+
+    def test_learned_cycle_length_from_history(self):
+        from runner.services import cycle
+
+        for d in (62, 32, 2):  # menstruações a cada 30 dias
+            self._period(d)
+        self.assertEqual(cycle.learned_cycle_length(self.user), 30)
+
+    # --- Saúde (RED-S) ---
+    def test_red_s_flag_after_90_days(self):
+        from runner.models import Anamnese
+        from runner.services import cycle
+
+        Anamnese.objects.create(athlete=self.user, age=30)
+        self._period(100)
+        flag = cycle.red_s_flag(self.user)
+        self.assertIsNotNone(flag)
+        self.assertGreaterEqual(flag["days"], 90)
+        # Dentro de 90 dias -> sem flag.
+        self.user.cycle_events.all().delete()
+        self._period(40)
+        self.assertIsNone(cycle.red_s_flag(self.user))
+
+    def test_red_s_skipped_on_contraception(self):
+        from runner.models import Anamnese
+        from runner.services import cycle
+
+        Anamnese.objects.create(athlete=self.user, age=30)
+        self._period(100)
+        self.prof.on_contraception = True
+        self.prof.save()
+        self.assertIsNone(cycle.red_s_flag(self.user))
+
+    # --- Oferta (pergunta, não decreta) ---
+    def test_guidance_offers_on_heavy_phase_and_stops_when_fine(self):
+        from runner.models import CycleSymptom
+        from runner.services import cycle
+
+        self._period(1)  # menstrual (fase que costuma pesar)
+        key = PlannedWorkout.objects.create(
+            athlete=self.user, date=timezone.localdate(),
+            workout_type="interval", target_distance_m=10_000,
+        )
+        g = cycle.guidance(self.user, key)
+        self.assertIsNotNone(g)
+        self.assertEqual(g["kind"], "offer")
+        # Ela diz que está bem -> a Zaya não insiste.
+        CycleSymptom.objects.create(athlete=self.user, date=timezone.localdate(), energy=4)
+        self.assertIsNone(cycle.guidance(self.user, key))
+
+    # --- Ações iniciadas pela atleta ---
+    def test_soften_today_lightens_and_does_not_leak_cycle(self):
+        from runner.services import cycle
+
+        w = PlannedWorkout.objects.create(
+            athlete=self.user, date=timezone.localdate(), workout_type="tempo",
+            target_distance_m=10_000, target_pace_low_s=300, target_pace_high_s=315,
+            title="Limiar 10 km",
+        )
+        self.assertEqual(cycle.soften_today(self.user), 1)
+        w.refresh_from_db()
+        self.assertEqual(w.workout_type, "easy")
+        self.assertIsNone(w.target_pace_low_s)
+        self.assertLess(w.target_distance_m, 10_000)
+        self.assertNotIn("ciclo", w.title.lower())  # privacidade: treinador vê o plano
+
+    def test_skip_today_marks_skipped(self):
+        from runner.services import cycle
+
+        w = PlannedWorkout.objects.create(
+            athlete=self.user, date=timezone.localdate(), workout_type="easy",
+            target_distance_m=6_000,
+        )
+        cycle.skip_today(self.user)
+        w.refresh_from_db()
+        self.assertEqual(w.status, PlannedWorkout.STATUS_SKIPPED)
+
+    # --- Privacidade na prontidão ---
+    def test_readiness_cycle_factor_is_private(self):
+        from runner.services import wellness
+
+        self._period(1)  # menstrual (pesada) -> sinal de ciclo
+        r_priv = wellness.readiness(self.user, activities=[], include_private=True)
+        self.assertIsNotNone(r_priv)
+        self.assertIn("ciclo", " ".join(r_priv["factors"]).lower())
+        # Sem include_private (qualquer contexto que NÃO seja a própria atleta):
+        # nada de ciclo. Aqui sem outros sinais, vira None — e isso já garante
+        # que o fator de ciclo não aparece.
+        r_pub = wellness.readiness(self.user, activities=[], include_private=False)
+        if r_pub:
+            self.assertNotIn("ciclo", " ".join(r_pub["factors"]).lower())
+        else:
+            self.assertIsNone(r_pub)
+
+    # --- Periodização consultiva ---
+    def test_outlook_tags_weeks(self):
+        from runner.services import cycle
+
+        self._period(1)
+        outlook = cycle.upcoming_phase_outlook(self.user, weeks=4)
+        self.assertTrue(outlook)
+        self.assertIn(outlook[0]["tag"], ("forte", "leve", "neutra"))
+
+    # --- Views (athlete-only) ---
+    def test_my_plan_renders_cycle_card(self):
+        self.client.force_login(self.user)
+        self._period(2)
+        resp = self.client.get(reverse("my_plan"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Seu ciclo")
+
+    def test_cycle_log_view_records_period_and_symptom(self):
+        from runner.models import CycleSymptom
+
+        self.client.force_login(self.user)
+        resp = self.client.post(
+            reverse("cycle_log"), {"period_started": "1", "energy": "3"}
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(self.user.cycle_events.exists())
+        self.assertTrue(CycleSymptom.objects.filter(athlete=self.user).exists())
+
+    def test_cycle_action_adapta_lightens_today(self):
+        self.client.force_login(self.user)
+        self._period(1)
+        w = PlannedWorkout.objects.create(
+            athlete=self.user, date=timezone.localdate(),
+            workout_type="interval", target_distance_m=10_000,
+        )
+        resp = self.client.post(reverse("cycle_action"), {"action": "adapta"})
+        self.assertEqual(resp.status_code, 302)
+        w.refresh_from_db()
+        self.assertEqual(w.workout_type, "easy")
+
+    def test_coach_view_never_shows_cycle(self):
+        """Garantia de privacidade: a página do treinador não expõe nada de ciclo."""
+        from runner.models import CoachAthlete, CycleSymptom, Profile
+
+        self._period(1)
+        CycleSymptom.objects.create(athlete=self.user, date=timezone.localdate(), energy=1)
+        coach = User.objects.create_user("treina", password="x")
+        Profile.objects.create(user=coach, is_coach=True)
+        CoachAthlete.objects.create(
+            coach=coach, athlete=self.user, status=CoachAthlete.STATUS_ACTIVE,
+        )
+        self.client.force_login(coach)
+        resp = self.client.get(reverse("coach_athlete", args=[self.user.id]))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode().lower()
+        # Marcadores específicos da feature de ciclo — nunca no lado-treinador.
+        # (Evita casar "macrociclo", que é legítimo no contexto de plano.)
+        self.assertNotIn("seu ciclo", body)
+        self.assertNotIn("menstru", body)
+        self.assertNotIn("anticoncep", body)
+
+    # --- Sexo: dica da Strava, confirmação no login, gate da feature ---
+    def test_sex_hint_from_strava_does_not_override_confirmation(self):
+        from runner.models import Profile
+        from runner.services import strava
+
+        strava._capture_sex_hint(self.user, "M")  # já é F confirmado
+        self.assertEqual(Profile.objects.get(user=self.user).sex, "F")
+
+    def test_sex_hint_prefills_when_unconfirmed(self):
+        from runner.models import Profile
+        from runner.services import strava
+
+        u = User.objects.create_user("novata", password="x")
+        Profile.objects.create(user=u)
+        strava._capture_sex_hint(u, "F")
+        p = Profile.objects.get(user=u)
+        self.assertEqual(p.sex, "F")
+        self.assertFalse(p.sex_confirmed)
+
+    def test_confirm_sex_view_sets_and_confirms(self):
+        from runner.models import Profile
+
+        u = User.objects.create_user("confirma", password="x")
+        Profile.objects.create(user=u)
+        c = Client()
+        c.force_login(u)
+        resp = c.post(reverse("confirm_sex"), {"sex": "F"})
+        self.assertEqual(resp.status_code, 302)
+        p = Profile.objects.get(user=u)
+        self.assertEqual(p.sex, "F")
+        self.assertTrue(p.sex_confirmed)
+
+    def test_cycle_hidden_for_men(self):
+        from runner.models import Profile
+
+        man = User.objects.create_user("corredor", password="x")
+        Profile.objects.create(user=man, sex=Profile.SEX_MALE, sex_confirmed=True)
+        c = Client()
+        c.force_login(man)
+        resp = c.get(reverse("my_plan"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "Seu ciclo")
+        self.assertNotContains(resp, "Se você menstrua")
+
+    def test_dashboard_prompts_sex_confirmation(self):
+        from runner.models import Profile
+
+        u = User.objects.create_user("pednova", password="x")
+        Profile.objects.create(user=u, sex="F")  # dica, ainda não confirmada
+        c = Client()
+        c.force_login(u)
+        resp = c.get(reverse("dashboard"))
+        self.assertContains(resp, "Confirma pra personalizar")

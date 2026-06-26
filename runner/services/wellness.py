@@ -45,18 +45,47 @@ def _avg_recent_rpe(athlete, days=10):
     return round(sum(rpes) / len(rpes), 1) if rpes else None
 
 
-def readiness(athlete, activities=None):
+def _cycle_signal(athlete):
+    """
+    Sinal PRIVADO do ciclo pra prontidão — só entra no contexto da PRÓPRIA atleta
+    (readiness com include_private=True). Nunca vai pro treinador.
+    """
+    from runner.services import cycle
+
+    prof = cycle.get_profile(athlete)
+    if not prof or not prof.enabled:
+        return None
+    ph = cycle.phase_for(athlete, profile=prof)
+    sym = cycle.todays_symptom(athlete)
+    penalty, factors = 0, []
+    if ph and ph.get("is_heavier"):
+        penalty += 8
+        factors.append(f"Ciclo: {ph['label'].lower()} (fase que costuma pesar)")
+    if sym and sym.energy and sym.energy < 3:
+        penalty += (3 - sym.energy) * 6
+        factors.append(f"Energia baixa hoje ({sym.energy}/5)")
+    if sym and sym.flow and sym.flow >= 2:
+        penalty += 5
+        factors.append("Menstruação intensa hoje")
+    return {"penalty": penalty, "factors": factors} if penalty else None
+
+
+def readiness(athlete, activities=None, include_private=False):
     """
     Índice de prontidão para treinar HOJE (0–100), heurístico e explicável.
     Retorna None se não houver nenhum sinal (sem corridas e sem check-in).
+
+    include_private: só quando é a PRÓPRIA atleta vendo (my_plan). Liga o sinal
+    do ciclo menstrual, que é privado e nunca pode aparecer pro treinador.
     """
     if activities is None:
         activities = list(athlete.activities.all())
     acwr = metrics.acwr(activities)
     checkin = _today_checkin(athlete)
     avg_rpe = _avg_recent_rpe(athlete)
+    cyc = _cycle_signal(athlete) if include_private else None
 
-    if not acwr and not checkin and avg_rpe is None:
+    if not acwr and not checkin and avg_rpe is None and not cyc:
         return None
 
     score = 100.0
@@ -80,6 +109,8 @@ def readiness(athlete, activities=None):
     if avg_rpe is not None and avg_rpe > 7:
         pen = round((avg_rpe - 7) * 8)
         score -= pen; factors.append(f"PSE recente alto ({avg_rpe})")
+    if cyc:
+        score -= cyc["penalty"]; factors.extend(cyc["factors"])
 
     score = max(0, min(100, round(score)))
     if score >= 75:

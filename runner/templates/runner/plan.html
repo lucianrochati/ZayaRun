@@ -29,6 +29,9 @@
 </div>
 {% endif %}
 
+<!-- Ciclo menstrual (privado da atleta, e SÓ pra mulheres — nada vai pro treinador) -->
+{% if show_cycle %}{% include "runner/_cycle.html" %}{% endif %}
+
 <!-- Check-in do dia -->
 {% if not today_checkin %}
 <div class="card">

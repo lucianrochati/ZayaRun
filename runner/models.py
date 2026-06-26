@@ -233,6 +233,14 @@ class Profile(models.Model):
     )
     is_coach = models.BooleanField(default=False)
     display_name = models.CharField(max_length=120, blank=True, default="")
+    # Sexo biológico: vem como DICA da Strava (athlete.sex) e é CONFIRMADO pela
+    # pessoa no login. Personaliza o treino e libera recursos específicos (ex.:
+    # acompanhamento de ciclo, só pra mulheres).
+    SEX_FEMALE = "F"
+    SEX_MALE = "M"
+    SEX_CHOICES = [(SEX_FEMALE, "Mulher"), (SEX_MALE, "Homem")]
+    sex = models.CharField(max_length=1, choices=SEX_CHOICES, blank=True, default="")
+    sex_confirmed = models.BooleanField(default=False)
     # Usados para zonas/zonas-alvo e leitura de wellness (futuro Garmin).
     resting_hr = models.IntegerField(null=True, blank=True)
     max_hr = models.IntegerField(null=True, blank=True)
@@ -255,6 +263,10 @@ class Profile(models.Model):
     @property
     def name(self):
         return self.display_name or self.user.get_username()
+
+    @property
+    def is_female(self):
+        return self.sex == self.SEX_FEMALE
 
 
 class CoachAthlete(models.Model):
@@ -786,3 +798,77 @@ class CoachSuggestion(models.Model):
 
     def __str__(self):
         return f"Sugestão Zaya ({self.get_status_display()}) - {self.athlete.get_username()}"
+
+
+# ==========================================================================
+# Ciclo menstrual (PRIVADO da atleta). Nada aqui aparece pro treinador — fica
+# só na página da atleta (plan.html) e nos services.cycle. Objetivo: treino
+# ciente do ciclo, individual e opt-in, que SEMPRE pergunta (nunca decreta).
+# Anticoncepcional hormonal achata o ciclo, então desliga a previsão de fase.
+# ==========================================================================
+class CycleProfile(models.Model):
+    """Configuração do acompanhamento de ciclo de uma atleta. Opt-in."""
+
+    athlete = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cycle_profile"
+    )
+    enabled = models.BooleanField(default=False)
+    # Anticoncepcional hormonal: sem o sobe-e-desce de estrogênio/progesterona,
+    # a previsão de fase não vale — a Zaya vai só pela sensação.
+    on_contraception = models.BooleanField(default=False)
+    avg_cycle_length = models.IntegerField(default=28)   # dias entre menstruações
+    avg_period_length = models.IntegerField(default=5)   # dias de menstruação
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        estado = "on" if self.enabled else "off"
+        return f"Ciclo de {self.athlete.get_username()} ({estado})"
+
+
+class CycleEvent(models.Model):
+    """Início de uma menstruação. Base pra prever a fase e aprender a duração real."""
+
+    athlete = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cycle_events"
+    )
+    start_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-start_date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["athlete", "start_date"], name="unique_athlete_cycle_start"
+            )
+        ]
+
+    def __str__(self):
+        return f"Menstruação {self.start_date:%d/%m} - {self.athlete.get_username()}"
+
+
+class CycleSymptom(models.Model):
+    """
+    Registro diário (opcional) de como a atleta está: energia, fluxo e sintomas.
+    É o que PERSONALIZA — a Zaya aprende em que fase ELA de fato cai. Um por dia.
+    """
+
+    athlete = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cycle_symptoms"
+    )
+    date = models.DateField(default=timezone.localdate)
+    energy = models.IntegerField(null=True, blank=True)  # 1 (no chão) – 5 (cheia)
+    flow = models.IntegerField(null=True, blank=True)    # 0 nada, 1 leve, 2 médio, 3 intenso
+    symptoms = models.JSONField(default=list, blank=True)  # ex.: ["colica","fadiga","humor"]
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["athlete", "date"], name="unique_athlete_cycle_symptom_day"
+            )
+        ]
+
+    def __str__(self):
+        return f"Sintomas {self.date:%d/%m} - {self.athlete.get_username()}"

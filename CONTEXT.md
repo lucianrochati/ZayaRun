@@ -182,7 +182,20 @@ python manage.py runserver
     rápido = só alerta leve (não derruba a nota — um fácil a 6:05 num teto de 6:35 não dá mais 54%). Em treino-chave,
     mais lento = falha de verdade (não pegou o estímulo), mais rápido = desconto leve. A frase e o "trecho forte" só
     aparecem onde fazem sentido (`pace_intent`).
-   Testes: **103 passando**.
+19. **Treino ciente do ciclo menstrual (PRIVADO da atleta).** Subsistema auto-contido — NADA vai pro treinador.
+    Modelos: `CycleProfile` (opt-in, anticoncepcional, durações), `CycleEvent` (início da menstruação) e `CycleSymptom`
+    (energia/fluxo/sintomas do dia). Serviço `services/cycle.py`: `phase_for` (previsão de fase a partir do último
+    início + duração **aprendida** pela mediana dos gaps; anticoncepcional desliga a previsão), `guidance` (a Zaya
+    **pergunta** "como você está? Tô bem / Adapta / Hoje não" — nunca decreta), `soften_today`/`skip_today` (ações da
+    atleta, título neutro pra não vazar), `red_s_flag` (sem menstruar 90+ dias em idade fértil → nudge gentil, não
+    diagnóstico), `personal_low_phases` (aprende em que fase ELA cai), `upcoming_phase_outlook` (periodização
+    consultiva). Privacidade: UI só em `plan.html` (`_cycle.html`); `wellness.readiness(..., include_private)` garante
+    que o fator de ciclo nunca apareça fora da página da própria atleta. Migration **0009**. Ver memória `zayarun-cycle-aware`.
+20. **Sexo: dica da Strava + confirmação + gate.** `Profile.sex` (F/M) e `Profile.sex_confirmed`. A Strava manda
+    `athlete.sex` como dica (`strava._capture_sex_hint` no `save_token`, sem sobrescrever confirmação). No login, o
+    dashboard pede pra confirmar (pré-marcando a dica) — view `confirm_sex`. A feature de ciclo aparece **só pra
+    mulher** (`sex=="F"`): gate em `my_plan` (`show_cycle`) + `plan.html`. Migration **0010**.
+   Testes: **123 passando**.
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.
