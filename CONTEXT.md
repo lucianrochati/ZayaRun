@@ -175,9 +175,14 @@ python manage.py runserver
 17. **Aderência justa + card que explica.** O pace-alvo de treino estruturado vale só pra parte forte — então a nota
     de pace é avaliada no **bloco de trabalho** (`metrics._effort_pace`), não na média que aquecimento/solto puxam (um
     limiar feito a 5:00 não pode marcar 5:39). A linha "Realizado" virou um disclosure (`_realized_detail.html`): ao
-    clicar, expande mostrando o planejado, os **blocos que a Zaya leu** (trecho forte marcado) e uma **frase simples**
+    clicar, expande mostrando os **blocos que a Zaya leu** (trecho forte marcado) e uma **frase simples**
     do porquê da nota (`adherence.summary`, sem fórmula). Cobre `plan_detail`, card da semana e `activity_detail`.
-   Testes: **101 passando**.
+18. **Aderência ciente do TIPO de treino.** O pace é avaliado diferente conforme `QUALITY_TYPES` (tempo/interval/
+    fartlek/race) vs treino fácil. Em fácil/longão o pace-alvo é um **TETO**: mais devagar = ok (nota cheia), mais
+    rápido = só alerta leve (não derruba a nota — um fácil a 6:05 num teto de 6:35 não dá mais 54%). Em treino-chave,
+    mais lento = falha de verdade (não pegou o estímulo), mais rápido = desconto leve. A frase e o "trecho forte" só
+    aparecem onde fazem sentido (`pace_intent`).
+   Testes: **103 passando**.
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.

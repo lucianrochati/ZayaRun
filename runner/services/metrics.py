@@ -325,18 +325,24 @@ def split_fade(activity):
     return round((second - first) / first * 100, 1)
 
 
-def _effort_pace(activity, hi_s, tol=5):
+# Treinos onde o pace-alvo é um ALVO a acertar (a faixa importa nos dois sentidos).
+# Nos demais (fácil, longão, educativo...) o pace é um TETO: correr mais devagar é
+# ok, e correr mais rápido é só um alerta leve — não uma falha.
+QUALITY_TYPES = ("tempo", "interval", "fartlek", "race")
+
+
+def _effort_pace(activity, hi_s, quality=True, tol=5):
     """
     Pace 'de trabalho' do realizado, em s/km.
 
-    Numa SESSÃO de vários blocos (aquecimento + parte forte + solto), o pace-alvo
-    vale só pra parte forte — então avaliamos o(s) bloco(s) no esforço-alvo, e não
-    a média ponderada que o aquecimento/solto puxam pra baixo (era o que dava
-    "5:39/km" num limiar feito a 5:00). Atividade única (ou sem alvo) -> o próprio
-    pace médio, como antes.
+    Em treino-chave feito como SESSÃO de vários blocos (aquecimento + parte forte
+    + solto), o pace-alvo vale só pra parte forte — então avaliamos o(s) bloco(s)
+    no esforço-alvo, e não a média que o aquecimento/solto puxam (era o que dava
+    "5:39/km" num limiar feito a 5:00). Atividade única, treino fácil, ou sem alvo
+    -> o próprio pace médio da sessão.
     """
     blocks = getattr(activity, "activities", None)
-    if not blocks or len(blocks) <= 1 or not hi_s:
+    if not quality or not blocks or len(blocks) <= 1 or not hi_s:
         return activity.pace_seconds_per_km
     paces = [b.pace_seconds_per_km for b in blocks if b.pace_seconds_per_km > 0]
     if not paces:
@@ -353,10 +359,12 @@ def _effort_pace(activity, hi_s, tol=5):
 def _adherence_summary(out):
     """
     Frase curta, sem fórmula, explicando a nota — "qualquer um entende".
-    A nota junta duas coisas: distância e ritmo (no trecho forte).
+    A nota junta duas coisas: distância e ritmo. O jeito de falar do ritmo muda
+    se o treino é fácil (pace é teto) ou chave (pace é alvo a acertar).
     """
     dp = out.get("distance_pct")
     pace = out.get("pace_eval")
+    easy = out.get("pace_intent") == "easy"
     if dp is None:
         dist = None
     elif 90 <= dp <= 112:
@@ -367,11 +375,18 @@ def _adherence_summary(out):
         dist = "você fez menos distância que o previsto"
 
     if pace == "on":
-        pc, pc_ok = "segurou o ritmo no trecho forte", True
+        pc = "manteve o passo fácil combinado" if easy else "segurou o ritmo no trecho forte"
+        pc_ok = True
     elif pace == "fast":
-        pc, pc_ok = "veio mais forte que o combinado no trecho puxado", True
+        if easy:
+            pc, pc_ok = "veio num passo mais forte que o fácil — num fácil, dá pra segurar mais", True
+        else:
+            pc, pc_ok = "veio mais forte que o combinado no trecho puxado", True
     elif pace == "slow":
-        pc, pc_ok = "o ritmo do trecho forte ficou mais lento que o combinado", False
+        if easy:
+            pc, pc_ok = "foi num passo tranquilo, mais leve que o combinado", True
+        else:
+            pc, pc_ok = "o ritmo do trecho forte ficou mais lento que o combinado", False
     else:
         pc, pc_ok = None, None
 
@@ -420,32 +435,46 @@ def adherence(planned, activity):
             )
 
     # --- Pace ---
-    # Avalia o pace da parte FORTE (não a média com aquecimento/solto). `pace_str`
-    # é esse pace de trabalho — é ele que o card mostra como "realizado".
+    # Treino-chave: alvo a acertar (mais lento = não pegou o estímulo, é a falha
+    # de verdade; mais rápido = só pegou mais, desconto leve). Treino fácil: o
+    # pace é um TETO — mais devagar é ok, mais rápido é só um alerta (não zera a
+    # nota). Em treino-chave em blocos, o pace avaliado é o da parte forte.
+    quality = planned.workout_type in QUALITY_TYPES
+    out["pace_intent"] = "quality" if quality else "easy"
     hi_for_effort = planned.target_pace_high_s or planned.target_pace_low_s
-    pace = _effort_pace(activity, hi_for_effort)
+    pace = _effort_pace(activity, hi_for_effort, quality=quality)
     out["pace_s"] = round(pace) if pace else 0
     out["pace_str"] = format_pace(pace) if pace else None
     if (planned.target_pace_low_s or planned.target_pace_high_s) and pace > 0:
         lo = planned.target_pace_low_s or planned.target_pace_high_s
         hi = planned.target_pace_high_s or planned.target_pace_low_s
-        mid = (lo + hi) / 2.0
         tol = 5  # 5s/km de tolerancia
-        if pace < lo - tol:
+        alvo = planned.target_pace_str
+        if lo - tol <= pace <= hi + tol:
+            out["pace_eval"], comp = "on", 1.0  # dentro da faixa = acertou
+        elif pace < lo - tol:  # mais rápido que o alvo
             out["pace_eval"] = "fast"
-            out["notes"].append(
-                f"Pace mais forte que o alvo ({format_pace(pace)} vs "
-                f"{planned.target_pace_str}/km previsto)."
-            )
-        elif pace > hi + tol:
+            if quality:
+                comp = max(0.8, 1.0 - (lo - pace) / lo / 0.4)  # pegou mais: desconto leve
+                out["notes"].append(
+                    f"Trecho forte mais forte que o alvo ({format_pace(pace)} vs {alvo}/km)."
+                )
+            else:
+                comp = max(0.7, 1.0 - (lo - pace) / lo / 0.5)  # furou o fácil: alerta leve
+                out["notes"].append(
+                    f"Veio mais rápido que o passo fácil ({format_pace(pace)} vs {alvo}/km) "
+                    f"— num fácil, segurar o ritmo ajuda a recuperar."
+                )
+        else:  # pace > hi + tol — mais lento que o alvo
             out["pace_eval"] = "slow"
-            out["notes"].append(
-                f"Pace mais lento que o alvo ({format_pace(pace)} vs "
-                f"{planned.target_pace_str}/km previsto)."
-            )
-        else:
-            out["pace_eval"] = "on"
-        components.append(max(0.0, 1.0 - (abs(pace - mid) / mid) / 0.10))  # zera a +-10%
+            if quality:
+                comp = max(0.0, 1.0 - (pace - hi) / hi / 0.10)  # não atingiu o estímulo
+                out["notes"].append(
+                    f"Trecho forte mais lento que o alvo ({format_pace(pace)} vs {alvo}/km)."
+                )
+            else:
+                comp = 1.0  # fácil/longão mais leve = tudo bem
+        components.append(comp)
 
     # --- Fade (precisa de splits) ---
     fade = split_fade(activity)
@@ -464,7 +493,8 @@ def adherence(planned, activity):
             {
                 "km": round(b.distance_m / 1000.0, 1),
                 "pace_str": b.pace_str,
-                "is_work": bool(hi and 0 < b.pace_seconds_per_km <= hi + 5),
+                # "trecho forte" só faz sentido em treino-chave.
+                "is_work": bool(quality and hi and 0 < b.pace_seconds_per_km <= hi + 5),
             }
             for b in raw_blocks
         ]

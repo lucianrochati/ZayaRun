@@ -288,10 +288,9 @@ code{background:#0c1424;padding:2px 6px;border-radius:6px;color:#cfe0ff;font-siz
 .wo-real .pill{margin-left:4px;padding:2px 8px}
 .wo-real-plain{display:block;margin-top:3px;font-size:12.5px;color:var(--good);font-weight:600}
 .wo-breakdown{margin:6px 0 2px;padding-left:10px;border-left:2px solid var(--border);
-  font-size:12px;color:var(--muted);line-height:1.5}
-.wo-breakdown .bd-row{display:flex;justify-content:space-between;gap:12px}
-.wo-breakdown .bd-label{color:var(--faint)}
-.wo-breakdown .bd-head{margin-top:5px}
+  font-size:12px;color:var(--muted);line-height:1.6}
+.wo-breakdown .bd-head{color:var(--faint);margin-bottom:1px}
+.wo-breakdown .bd-line{display:block}
 .wo-breakdown .bd-work{color:var(--good);font-weight:600}
 .wo-breakdown .bd-why{margin:6px 0 0;color:var(--text);line-height:1.5}
 .wo-why{margin-top:5px}

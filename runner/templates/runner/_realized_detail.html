@@ -1,17 +1,17 @@
 {% comment %}
-Linha "Realizado" clicável: expande mostrando o planejado, os blocos que a Zaya
-leu (sessão somada) e uma explicação simples da nota. Espera `w` no contexto
-(um PlannedWorkout com `.realized` e `.adherence` já anexados pela view).
+Linha "Realizado" clicável: expande mostrando os blocos que a Zaya leu (sessão
+somada) e uma frase simples explicando a nota. O planejado já aparece na linha
+acima (wo-meta), então não repetimos aqui. Espera `w` no contexto (PlannedWorkout
+com `.realized` e `.adherence` já anexados pela view).
 {% endcomment %}
 {% if w.realized %}
 <details class="wo-real">
   <summary>✅ Realizado <b>{{ w.realized.distance_km|floatformat:1 }} km</b>{% if w.adherence.pace_str %} · {{ w.adherence.pace_str }}/km{% elif w.realized.pace_str %} · {{ w.realized.pace_str }}/km{% endif %}{% if w.realized.count > 1 %} · {{ w.realized.count }} atividades{% endif %}{% if w.adherence %} <span class="pill pill-{{ w.adherence.zone }}">{{ w.adherence.score }}%</span>{% endif %}</summary>
   <div class="wo-breakdown">
-    <div class="bd-row"><span class="bd-label">Planejado</span><span>{% if w.target_distance_km %}{{ w.target_distance_km }} km{% endif %}{% if w.target_pace_str %} · {{ w.target_pace_str }}/km{% endif %}</span></div>
     {% if w.adherence.blocks %}
-      <div class="bd-label bd-head">O que a Zaya leu ({{ w.realized.count }} atividades):</div>
+      <div class="bd-head">O que a Zaya leu ({{ w.realized.count }} atividades):</div>
       {% for b in w.adherence.blocks %}
-        <div class="bd-row{% if b.is_work %} bd-work{% endif %}"><span>{{ b.km|floatformat:1 }} km</span><span>{{ b.pace_str }}/km{% if b.is_work %} · trecho forte{% endif %}</span></div>
+        <div class="bd-line{% if b.is_work %} bd-work{% endif %}">{{ b.km|floatformat:1 }} km · {{ b.pace_str }}/km{% if b.is_work %} · trecho forte{% endif %}</div>
       {% endfor %}
     {% endif %}
     {% if w.adherence.summary %}<p class="bd-why">{{ w.adherence.summary }}</p>{% endif %}

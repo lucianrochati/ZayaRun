@@ -267,6 +267,29 @@ class AdherenceTests(TestCase):
         self.assertIn("mais lento", adh["summary"].lower())
         self.assertNotIn("blocks", adh)  # atividade única não lista blocos
 
+    def test_easy_run_faster_than_ceiling_is_not_a_failure(self):
+        """Fácil feito mais rápido que o teto não pode dar 'fora do alvo' (era 54%)."""
+        planned = PlannedWorkout(
+            workout_type="easy", date=timezone.localdate(),
+            target_distance_m=8_000, target_pace_low_s=395, target_pace_high_s=410,  # 6:35–6:50
+        )
+        adh = metrics.adherence(planned, make_run(8_000, 8 * 365))  # 8 km a 6:05/km
+        self.assertEqual(adh["distance_pct"], 100)
+        self.assertEqual(adh["pace_eval"], "fast")
+        self.assertEqual(adh["zone"], "ideal")              # verde, não "risco"
+        self.assertGreaterEqual(adh["score"], 85)           # não mais 54%
+        self.assertNotIn("trecho", adh["summary"].lower())  # fácil não tem "trecho forte"
+
+    def test_easy_run_slower_than_ceiling_is_fine(self):
+        """Fácil mais devagar que o teto é ok — não penaliza."""
+        planned = PlannedWorkout(
+            workout_type="easy", date=timezone.localdate(),
+            target_distance_m=8_000, target_pace_low_s=395, target_pace_high_s=410,
+        )
+        adh = metrics.adherence(planned, make_run(8_000, 8 * 430))  # 7:10/km
+        self.assertEqual(adh["pace_eval"], "slow")
+        self.assertEqual(adh["score"], 100)
+
     def test_no_activity_returns_none(self):
         planned = PlannedWorkout(workout_type="easy", date=timezone.localdate())
         self.assertIsNone(metrics.adherence(planned, None))
