@@ -222,6 +222,51 @@ class AdherenceTests(TestCase):
         self.assertEqual(adh["pace_eval"], "slow")
         self.assertTrue(any("abaixo" in n.lower() for n in adh["notes"]))
 
+    def test_session_pace_judged_on_work_block_not_average(self):
+        """Limiar 2km leve + 8km no alvo + 1km solto: o pace médio (5:39) não
+        pode zerar a nota — avalia-se o bloco forte (5:00), dentro do alvo."""
+        from runner.models import Activity, RealizedSession
+
+        planned = PlannedWorkout(
+            workout_type="tempo",
+            date=timezone.localdate(),
+            target_distance_m=11_000,
+            target_pace_low_s=294,   # 4:54
+            target_pace_high_s=308,  # 5:08
+        )
+        base = timezone.now()
+        blocks = [
+            Activity(sport_type="Run", distance_m=2_000, moving_time_s=780,
+                     start_date=base),                                   # 6:30 aquecimento
+            Activity(sport_type="Run", distance_m=8_000, moving_time_s=2_400,
+                     start_date=base + timedelta(minutes=15)),           # 5:00 no alvo
+            Activity(sport_type="Run", distance_m=1_000, moving_time_s=420,
+                     start_date=base + timedelta(minutes=50)),           # 7:00 solto
+        ]
+        adh = metrics.adherence(planned, RealizedSession(blocks))
+        self.assertEqual(adh["distance_pct"], 100)
+        self.assertEqual(adh["pace_eval"], "on")     # avaliou o bloco de 5:00
+        self.assertEqual(adh["pace_str"], "5:00")    # exibe o pace de trabalho
+        self.assertGreaterEqual(adh["score"], 85)    # não mais 50%
+        # Card expande mostrando os blocos lidos, com o trecho forte marcado.
+        self.assertEqual(len(adh["blocks"]), 3)
+        work = [b for b in adh["blocks"] if b["is_work"]]
+        self.assertEqual(len(work), 1)
+        self.assertEqual(work[0]["km"], 8.0)
+        self.assertTrue(adh["summary"])
+
+    def test_summary_explains_score_in_plain_words(self):
+        """A nota vem com uma frase simples (sem fórmula) do porquê."""
+        planned = PlannedWorkout(
+            workout_type="tempo", date=timezone.localdate(),
+            target_distance_m=11_000, target_pace_low_s=294, target_pace_high_s=308,
+        )
+        # 11 km na distância, mas média 5:39/km (mais lenta que o alvo).
+        adh = metrics.adherence(planned, make_run(11_000, 11 * 339))
+        self.assertIn("distância", adh["summary"].lower())
+        self.assertIn("mais lento", adh["summary"].lower())
+        self.assertNotIn("blocks", adh)  # atividade única não lista blocos
+
     def test_no_activity_returns_none(self):
         planned = PlannedWorkout(workout_type="easy", date=timezone.localdate())
         self.assertIsNone(metrics.adherence(planned, None))
@@ -598,6 +643,35 @@ class ViewSmokeTests(TestCase):
         # Bloco "Realizado" só renderiza quando há atividade da Strava casada (5 km).
         self.assertContains(resp, "Realizado")
         self.assertContains(resp, "Por que este treino")    # propósito do longão
+
+    def test_plan_detail_expands_session_breakdown(self):
+        """Card 'Realizado' expande: blocos lidos + trecho forte + frase da nota."""
+        from runner.models import Activity, PlannedWorkout, TrainingPlan
+
+        plan = TrainingPlan.objects.create(
+            athlete=self.user, goal_distance_m=11000,
+            goal_race_date=timezone.localdate() + timedelta(days=40),
+            start_date=timezone.localdate(), status=TrainingPlan.STATUS_ACTIVE,
+        )
+        w = PlannedWorkout.objects.create(
+            athlete=self.user, plan=plan, date=timezone.localdate(), workout_type="tempo",
+            title="Ritmo 11 km", target_distance_m=11000,
+            target_pace_low_s=294, target_pace_high_s=308,
+            status=PlannedWorkout.STATUS_COMPLETED,
+        )
+        base = timezone.now()
+        specs = [("c1", 2000, 780, 0), ("c2", 8000, 2400, 15), ("c3", 1000, 420, 50)]
+        for ext, dist, secs, mins in specs:
+            a = Activity.objects.create(
+                user=self.user, source=Activity.SOURCE_STRAVA, external_id=ext,
+                sport_type="Run", start_date=base + timedelta(minutes=mins),
+                distance_m=dist, moving_time_s=secs,
+            )
+            w.matched_activities.add(a)
+        resp = self.client.get(reverse("plan_detail", args=[plan.id]))
+        self.assertContains(resp, "O que a Zaya leu")
+        self.assertContains(resp, "trecho forte")
+        self.assertContains(resp, "3 atividades")
 
     def test_coach_flow_end_to_end(self):
         self.client.post(reverse("become_coach"))

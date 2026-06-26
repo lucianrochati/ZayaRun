@@ -279,8 +279,21 @@ code{background:#0c1424;padding:2px 6px;border-radius:6px;color:#cfe0ff;font-siz
 .wo-title{font-weight:600;font-size:14px}
 .wo-meta{font-size:12px;color:var(--muted)}
 .wo-desc{font-size:12px;color:var(--faint);margin-top:2px}
-.wo-real{font-size:12.5px;color:var(--good);font-weight:600;margin-top:3px;display:block}
-.wo-real .pill{margin-left:6px;padding:2px 8px}
+.wo-real{margin-top:3px}
+.wo-real>summary{cursor:pointer;list-style:none;font-size:12.5px;color:var(--good);
+  font-weight:600;width:fit-content}
+.wo-real>summary::-webkit-details-marker{display:none}
+.wo-real>summary::before{content:"▸ ";color:var(--faint);font-weight:400}
+.wo-real[open]>summary::before{content:"▾ "}
+.wo-real .pill{margin-left:4px;padding:2px 8px}
+.wo-real-plain{display:block;margin-top:3px;font-size:12.5px;color:var(--good);font-weight:600}
+.wo-breakdown{margin:6px 0 2px;padding-left:10px;border-left:2px solid var(--border);
+  font-size:12px;color:var(--muted);line-height:1.5}
+.wo-breakdown .bd-row{display:flex;justify-content:space-between;gap:12px}
+.wo-breakdown .bd-label{color:var(--faint)}
+.wo-breakdown .bd-head{margin-top:5px}
+.wo-breakdown .bd-work{color:var(--good);font-weight:600}
+.wo-breakdown .bd-why{margin:6px 0 0;color:var(--text);line-height:1.5}
 .wo-why{margin-top:5px}
 .wo-why>summary{cursor:pointer;list-style:none;font-size:12px;color:var(--brand-2);font-weight:600;width:fit-content}
 .wo-why>summary::-webkit-details-marker{display:none}

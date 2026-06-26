@@ -172,7 +172,12 @@ python manage.py runserver
     próximas no tempo (`matching._cluster_sessions`, gap ≤ 4 h) e soma todas no `PlannedWorkout.matched_activities`
     (M2M). O realizado/aderência leem `planned.realized` (`RealizedSession`: distância e tempo somados, pace
     ponderado). Migration **0008** faz o backfill do histórico (recupera blocos órfãos do mesmo dia).
-   Testes: **98 passando**.
+17. **Aderência justa + card que explica.** O pace-alvo de treino estruturado vale só pra parte forte — então a nota
+    de pace é avaliada no **bloco de trabalho** (`metrics._effort_pace`), não na média que aquecimento/solto puxam (um
+    limiar feito a 5:00 não pode marcar 5:39). A linha "Realizado" virou um disclosure (`_realized_detail.html`): ao
+    clicar, expande mostrando o planejado, os **blocos que a Zaya leu** (trecho forte marcado) e uma **frase simples**
+    do porquê da nota (`adherence.summary`, sem fórmula). Cobre `plan_detail`, card da semana e `activity_detail`.
+   Testes: **101 passando**.
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.

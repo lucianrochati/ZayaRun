@@ -325,6 +325,69 @@ def split_fade(activity):
     return round((second - first) / first * 100, 1)
 
 
+def _effort_pace(activity, hi_s, tol=5):
+    """
+    Pace 'de trabalho' do realizado, em s/km.
+
+    Numa SESSÃO de vários blocos (aquecimento + parte forte + solto), o pace-alvo
+    vale só pra parte forte — então avaliamos o(s) bloco(s) no esforço-alvo, e não
+    a média ponderada que o aquecimento/solto puxam pra baixo (era o que dava
+    "5:39/km" num limiar feito a 5:00). Atividade única (ou sem alvo) -> o próprio
+    pace médio, como antes.
+    """
+    blocks = getattr(activity, "activities", None)
+    if not blocks or len(blocks) <= 1 or not hi_s:
+        return activity.pace_seconds_per_km
+    paces = [b.pace_seconds_per_km for b in blocks if b.pace_seconds_per_km > 0]
+    if not paces:
+        return activity.pace_seconds_per_km
+    # Blocos tão rápidos quanto o limite lento do alvo = a parte "de trabalho".
+    work = [b for b in blocks if 0 < b.pace_seconds_per_km <= hi_s + tol]
+    if not work:
+        return min(paces)  # ninguém atingiu o alvo: usa o bloco mais rápido
+    dist = sum(b.distance_m for b in work)
+    time = sum(b.moving_time_s for b in work)
+    return time / (dist / 1000.0) if dist > 0 else activity.pace_seconds_per_km
+
+
+def _adherence_summary(out):
+    """
+    Frase curta, sem fórmula, explicando a nota — "qualquer um entende".
+    A nota junta duas coisas: distância e ritmo (no trecho forte).
+    """
+    dp = out.get("distance_pct")
+    pace = out.get("pace_eval")
+    if dp is None:
+        dist = None
+    elif 90 <= dp <= 112:
+        dist = "você fez a distância combinada"
+    elif dp > 112:
+        dist = "você fez mais distância que o previsto"
+    else:
+        dist = "você fez menos distância que o previsto"
+
+    if pace == "on":
+        pc, pc_ok = "segurou o ritmo no trecho forte", True
+    elif pace == "fast":
+        pc, pc_ok = "veio mais forte que o combinado no trecho puxado", True
+    elif pace == "slow":
+        pc, pc_ok = "o ritmo do trecho forte ficou mais lento que o combinado", False
+    else:
+        pc, pc_ok = None, None
+
+    if dist and pc:
+        dist_ok = "menos distância" not in dist
+        conj = "e" if dist_ok == pc_ok else "mas"
+        phrase = f"{dist}, {conj} {pc}"
+    elif dist:
+        phrase = dist
+    elif pc:
+        phrase = pc
+    else:
+        return "Treino concluído."
+    return phrase[0].upper() + phrase[1:] + "."
+
+
 def adherence(planned, activity):
     """
     Compara um treino PRESCRITO (PlannedWorkout) com a atividade REALIZADA.
@@ -357,7 +420,12 @@ def adherence(planned, activity):
             )
 
     # --- Pace ---
-    pace = activity.pace_seconds_per_km
+    # Avalia o pace da parte FORTE (não a média com aquecimento/solto). `pace_str`
+    # é esse pace de trabalho — é ele que o card mostra como "realizado".
+    hi_for_effort = planned.target_pace_high_s or planned.target_pace_low_s
+    pace = _effort_pace(activity, hi_for_effort)
+    out["pace_s"] = round(pace) if pace else 0
+    out["pace_str"] = format_pace(pace) if pace else None
     if (planned.target_pace_low_s or planned.target_pace_high_s) and pace > 0:
         lo = planned.target_pace_low_s or planned.target_pace_high_s
         hi = planned.target_pace_high_s or planned.target_pace_low_s
@@ -388,6 +456,19 @@ def adherence(planned, activity):
                 f"Perdeu ~{fade:.0f}% de ritmo na 2ª metade — largou forte demais."
             )
 
+    # --- Blocos lidos (só em sessão de vários pedaços) — p/ o card expandir ---
+    raw_blocks = getattr(activity, "activities", None)
+    if raw_blocks and len(raw_blocks) > 1:
+        hi = planned.target_pace_high_s or planned.target_pace_low_s
+        out["blocks"] = [
+            {
+                "km": round(b.distance_m / 1000.0, 1),
+                "pace_str": b.pace_str,
+                "is_work": bool(hi and 0 < b.pace_seconds_per_km <= hi + 5),
+            }
+            for b in raw_blocks
+        ]
+
     out["score"] = round(sum(components) / len(components) * 100) if components else 100
     score = out["score"]
     if score >= 85:
@@ -396,6 +477,7 @@ def adherence(planned, activity):
         out["status"], out["zone"] = "Parcial", "atencao"
     else:
         out["status"], out["zone"] = "Fora do alvo", "risco"
+    out["summary"] = _adherence_summary(out)
     return out
 
 

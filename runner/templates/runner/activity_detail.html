@@ -36,6 +36,7 @@
     <h3>{{ planned.title }}</h3>
     {% if adherence %}<span class="pill pill-{{ adherence.zone }}">{{ adherence.status }} · {{ adherence.score }}%</span>{% endif %}
   </div>
+  {% if adherence.summary %}<p class="card-sub" style="margin-top:2px;color:var(--text)">{{ adherence.summary }}</p>{% endif %}
   <p class="card-sub" style="margin-top:0">Prescrito:
     {% if planned.target_distance_km %}{{ planned.target_distance_km }} km{% endif %}
     {% if planned.target_pace_str %} · {{ planned.target_pace_str }}/km{% endif %}

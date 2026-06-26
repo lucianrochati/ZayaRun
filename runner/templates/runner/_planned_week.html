@@ -13,13 +13,7 @@
                 {% if w.target_pace_str %} · {{ w.target_pace_str }}/km{% endif %}
                 {% if w.source == 'ai' %} · IA{% elif w.source == 'coach' %} · treinador{% endif %}
               </span>
-              {% if w.realized %}
-                <span class="wo-real">✅ Realizado <b>{{ w.realized.distance_km|floatformat:1 }} km</b>
-                  {% if w.realized.pace_str %} · {{ w.realized.pace_str }}/km{% endif %}
-                  {% if w.realized.count > 1 %} · {{ w.realized.count }} atividades{% endif %}
-                  {% if w.adherence %}<span class="pill pill-{{ w.adherence.zone }}">{{ w.adherence.score }}%</span>{% endif %}
-                </span>
-              {% endif %}
+              {% include "runner/_realized_detail.html" %}
               {% if w.description %}<span class="wo-desc">{{ w.description }}</span>{% endif %}
               {% if w.purpose %}<details class="wo-why"><summary>🎯 Por que este treino</summary><span>{{ w.purpose }}</span></details>{% endif %}
             </div>
