@@ -165,9 +165,14 @@ python manage.py runserver
     `resolve_suggestion`/`set_zaya_autonomy`. ⚠️ NÃO ligar o "treino de hoje" diário sem este modelo de consentimento.
 15. **Propósito do treino + Planejado × Realizado.** Cada treino mostra **"Por que este treino"** — explicação real
     de treinador (`plans.WORKOUT_PURPOSE`/`workout_purpose()`, anexada em `_plan_weeks`/`planned_week`). E cada card
-    exibe **Planejado X km × Realizado Y km** (Y vem do `matched_activity` da Strava, casado por data). No
+    exibe **Planejado X km × Realizado Y km** (Y é a **sessão** da Strava casada por data). No
     `plan_detail` e no card da semana (`_planned_week.html`).
-   Testes: **96 passando**.
+16. **Realizado por SESSÃO, não por atividade solta.** Um treino do dia vira várias atividades quando o atleta
+    para/recomeça entre os blocos (tiros: 2 km leve + 8 km forte + 1 km leve = 11 km). O matching agrupa corridas
+    próximas no tempo (`matching._cluster_sessions`, gap ≤ 4 h) e soma todas no `PlannedWorkout.matched_activities`
+    (M2M). O realizado/aderência leem `planned.realized` (`RealizedSession`: distância e tempo somados, pace
+    ponderado). Migration **0008** faz o backfill do histórico (recupera blocos órfãos do mesmo dia).
+   Testes: **98 passando**.
 
 ### Próximos passos
 1. **Definir host de produção** (Railway ou Render) e deixar no ar com HTTPS.

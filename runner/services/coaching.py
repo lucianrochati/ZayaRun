@@ -69,7 +69,7 @@ def auto_prescribe(athlete, week_start=None, created_by=None, use_ai=True):
         athlete=athlete,
         date__range=(monday, monday + timedelta(days=6)),
         status=PlannedWorkout.STATUS_PLANNED,
-        matched_activity__isnull=True,
+        matched_activities__isnull=True,
     ).delete()
     objs = [
         PlannedWorkout(
@@ -207,7 +207,7 @@ def _safe_feedback(planned):
 
 def analyze_workout(planned):
     """Devolve um feedback do treino realizado vs prescrito (IA + regras)."""
-    activity = planned.matched_activity
+    activity = planned.realized
     if not activity:
         return None
     adh = metrics.adherence(planned, activity)

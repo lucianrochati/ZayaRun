@@ -261,7 +261,57 @@ class MatchingTests(TestCase):
         self.assertEqual(matched.pk, planned.pk)
         planned.refresh_from_db()
         self.assertEqual(planned.status, PlannedWorkout.STATUS_COMPLETED)
-        self.assertEqual(planned.matched_activity_id, act.pk)
+        self.assertIn(act.pk, planned.matched_activities.values_list("pk", flat=True))
+
+    def test_split_session_sums_into_one_realizado(self):
+        """Tiros feitos em 3 blocos (2+8+1 km) = realizado de 11 km no treino."""
+        planned = PlannedWorkout.objects.create(
+            athlete=self.user,
+            date=timezone.localdate(),
+            workout_type="interval",
+            target_distance_m=11_000,
+        )
+        base = timezone.now() - timedelta(hours=2)
+        # 2 km leve -> 8 km forte -> 1 km leve, encadeados (mesma sessão).
+        self._run(external_id="s1", distance_m=2_000, moving_time_s=720,
+                  start_date=base)
+        self._run(external_id="s2", distance_m=8_000, moving_time_s=2_160,
+                  start_date=base + timedelta(minutes=15))
+        self._run(external_id="s3", distance_m=1_000, moving_time_s=360,
+                  start_date=base + timedelta(minutes=50))
+
+        matching.reconcile(self.user)
+
+        planned.refresh_from_db()
+        self.assertEqual(planned.status, PlannedWorkout.STATUS_COMPLETED)
+        self.assertEqual(planned.matched_activities.count(), 3)
+        self.assertEqual(planned.realized.distance_km, 11.0)
+        # Aderência de distância bate o previsto (não mais 2 de 11 km).
+        adh = metrics.adherence(planned, planned.realized)
+        self.assertEqual(adh["distance_pct"], 100)
+
+    def test_two_sessions_same_day_match_separate_plans(self):
+        """Leve de manhã + tiros à tarde: cada sessão casa com seu treino."""
+        today = timezone.localdate()
+        easy = PlannedWorkout.objects.create(
+            athlete=self.user, date=today, workout_type="easy",
+            target_distance_m=5_000,
+        )
+        tiros = PlannedWorkout.objects.create(
+            athlete=self.user, date=today, workout_type="interval",
+            target_distance_m=10_000,
+        )
+        morning = timezone.now() - timedelta(hours=10)
+        self._run(external_id="am", distance_m=5_000, moving_time_s=1_650,
+                  start_date=morning)
+        self._run(external_id="pm", distance_m=10_000, moving_time_s=2_700,
+                  start_date=morning + timedelta(hours=8))  # gap > 4h = outra sessão
+
+        matching.reconcile(self.user)
+
+        easy.refresh_from_db(); tiros.refresh_from_db()
+        self.assertEqual(easy.realized.distance_km, 5.0)
+        self.assertEqual(tiros.realized.distance_km, 10.0)
 
     def test_rest_day_is_never_matched(self):
         PlannedWorkout.objects.create(
@@ -480,8 +530,7 @@ class CoachingTests(TestCase):
             sport_type="Run", start_date=timezone.now(),
             distance_m=10_000, moving_time_s=3_060,
         )
-        planned.matched_activity = act
-        planned.save()
+        planned.matched_activities.add(act)
         with self.settings(INSIGHT_PROVIDER="rules"):
             res = coaching.analyze_workout(planned)
         self.assertIsNotNone(res)
@@ -538,11 +587,12 @@ class ViewSmokeTests(TestCase):
             user=self.user, source=Activity.SOURCE_STRAVA, external_id="pr1",
             sport_type="Run", start_date=timezone.now(), distance_m=5000, moving_time_s=1650,
         )
-        PlannedWorkout.objects.create(
+        w = PlannedWorkout.objects.create(
             athlete=self.user, plan=plan, date=timezone.localdate(), workout_type="long",
-            title="Longão 9 km", target_distance_m=9000, matched_activity=act,
+            title="Longão 9 km", target_distance_m=9000,
             status=PlannedWorkout.STATUS_COMPLETED,
         )
+        w.matched_activities.add(act)
         resp = self.client.get(reverse("plan_detail", args=[plan.id]))
         self.assertContains(resp, "Planejado")
         # Bloco "Realizado" só renderiza quando há atividade da Strava casada (5 km).
@@ -1041,7 +1091,7 @@ class MultiPlanGatingTests(TestCase):
         )
         self.assertIsNone(matching.match_activity_to_plan(act))  # não casa
         w.refresh_from_db()
-        self.assertIsNone(w.matched_activity_id)
+        self.assertEqual(w.matched_activities.count(), 0)
 
 
 class AutoregTests(TestCase):

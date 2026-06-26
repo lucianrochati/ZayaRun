@@ -123,6 +123,87 @@ class Activity(models.Model):
         return "run" in (self.sport_type or "").lower()
 
 
+class RealizedSession:
+    """
+    Agregado read-only de VÁRIAS atividades que, juntas, formam UM treino do dia
+    (uma "sessão"). Ex.: tiros feitos como 2 km leve + 8 km forte + 1 km leve,
+    cada bloco virando uma atividade separada na Strava = 11 km no total.
+
+    Faz "quack" como uma Activity (mesma interface usada por services.metrics e
+    pelos templates) para que o planejado x realizado some os blocos em vez de
+    enxergar só o primeiro pedaço. Não é um modelo — vive em memória.
+    """
+
+    def __init__(self, activities):
+        self.activities = sorted(activities, key=lambda a: a.start_date)
+
+    @property
+    def count(self):
+        return len(self.activities)
+
+    @property
+    def is_run(self):
+        return True
+
+    @property
+    def distance_m(self):
+        return sum(a.distance_m for a in self.activities)
+
+    @property
+    def distance_km(self):
+        return self.distance_m / 1000.0
+
+    @property
+    def moving_time_s(self):
+        return sum(a.moving_time_s for a in self.activities)
+
+    @property
+    def elapsed_time_s(self):
+        return sum(a.elapsed_time_s for a in self.activities)
+
+    @property
+    def total_elevation_gain_m(self):
+        return sum(a.total_elevation_gain_m for a in self.activities)
+
+    @property
+    def start_date(self):
+        return self.activities[0].start_date if self.activities else None
+
+    @property
+    def pace_seconds_per_km(self):
+        """Pace médio PONDERADO da sessão (tempo total / distância total)."""
+        dist = self.distance_m
+        if dist <= 0 or self.moving_time_s <= 0:
+            return 0
+        return self.moving_time_s / (dist / 1000.0)
+
+    @property
+    def pace_str(self):
+        from runner.services import metrics
+
+        return metrics.format_pace(self.pace_seconds_per_km)
+
+    @property
+    def duration_str(self):
+        total = self.moving_time_s
+        h, rem = divmod(total, 3600)
+        m, s = divmod(rem, 60)
+        if h:
+            return f"{h}h{m:02d}min"
+        return f"{m}min{s:02d}s"
+
+    @property
+    def splits(self):
+        """
+        Parciais por km. Só expomos quando a sessão é UM bloco contínuo — com
+        vários blocos (para/recomeça), o "fade" 1ª x 2ª metade fica enganoso, então
+        preferimos não inventar o sinal a dar um aviso errado.
+        """
+        if len(self.activities) == 1:
+            return self.activities[0].splits or []
+        return []
+
+
 # ==========================================================================
 # Lado-treinador (assessoria): perfil, relacao coach<->atleta, prescricao,
 # feedback subjetivo e plano de prova. Tudo opcional — o lado-corredor
@@ -361,11 +442,11 @@ class PlannedWorkout(models.Model):
     status = models.CharField(
         max_length=12, choices=STATUS_CHOICES, default=STATUS_PLANNED
     )
-    # Atividade da Strava que cumpriu este treino (preenchido pelo matching).
-    matched_activity = models.ForeignKey(
+    # Atividade(s) da Strava que cumpriram este treino (preenchido pelo matching).
+    # É M2M porque um treino do dia pode virar VÁRIAS atividades (para/recomeça
+    # entre blocos). O "realizado" é a soma delas — ver `realized`.
+    matched_activities = models.ManyToManyField(
         Activity,
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="planned_workouts",
     )
@@ -400,6 +481,24 @@ class PlannedWorkout(models.Model):
     def is_key_workout(self):
         """Treino-chave (quali): longão, ritmo, intervalado, prova."""
         return self.workout_type in ("long", "tempo", "interval", "fartlek", "race")
+
+    @property
+    def realized(self):
+        """
+        O REALIZADO deste treino: a sessão somada de todas as atividades casadas
+        (distância, tempo e pace ponderado). `None` se nada foi casado ainda.
+        É o que o planejado x realizado e a Zaya devem ler — nunca um bloco solto.
+        """
+        if not hasattr(self, "_realized"):
+            acts = list(self.matched_activities.all())
+            self._realized = RealizedSession(acts) if acts else None
+        return self._realized
+
+    @property
+    def representative_activity(self):
+        """Atividade única 'principal' da sessão (a mais longa), p/ onde só cabe uma."""
+        acts = list(self.matched_activities.all())
+        return max(acts, key=lambda a: a.distance_m) if acts else None
 
 
 def live_planned_filter():

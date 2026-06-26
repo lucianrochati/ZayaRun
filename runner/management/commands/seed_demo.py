@@ -126,7 +126,7 @@ class Command(BaseCommand):
         )
         if done:
             WorkoutFeedback.objects.create(
-                athlete=athlete, planned_workout=done, activity=done.matched_activity,
+                athlete=athlete, planned_workout=done, activity=done.representative_activity,
                 date=done.date, rpe=7, feeling="good", soreness=2,
             )
         DailyCheckin.objects.create(

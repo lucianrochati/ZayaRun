@@ -116,10 +116,10 @@ def planned_week(athlete, ref_date=None):
         athlete.planned_workouts.filter(
             live_planned_filter(),
             date__range=(monday, monday + timedelta(days=6)),
-        ).select_related("matched_activity")
+        ).prefetch_related("matched_activities")
     )
     for w in workouts:
-        w.adherence = metrics.adherence(w, w.matched_activity) if w.matched_activity else None
+        w.adherence = metrics.adherence(w, w.realized)
         w.purpose = plans.workout_purpose(w.workout_type)
     by_date = {}
     for w in workouts:
@@ -360,7 +360,7 @@ def workout_feedback(request, planned_id):
         planned_workout=planned,
         defaults={
             "athlete": request.user,
-            "activity": planned.matched_activity,
+            "activity": planned.representative_activity,
             "date": planned.date,
             "rpe": _to_int(request.POST.get("rpe")),
             "feeling": request.POST.get("feeling", ""),
@@ -478,9 +478,9 @@ def _back_to(request, workout):
 
 def _plan_weeks(plan):
     """Agrupa os treinos do plano por semana (segunda→domingo), com aderência."""
-    workouts = list(plan.workouts.select_related("matched_activity").order_by("date"))
+    workouts = list(plan.workouts.prefetch_related("matched_activities").order_by("date"))
     for w in workouts:
-        w.adherence = metrics.adherence(w, w.matched_activity) if w.matched_activity else None
+        w.adherence = metrics.adherence(w, w.realized)
         w.purpose = plans.workout_purpose(w.workout_type)
     today = timezone.localdate()
     by_monday = {}

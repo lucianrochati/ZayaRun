@@ -255,9 +255,11 @@ def activity_detail(request, pk):
             strava.fetch_activity_detail(request.user, activity)
         except strava.StravaError as exc:
             messages.warning(request, f"Nao foi possivel carregar os splits: {exc}")
-    # Se esta atividade cumpriu um treino prescrito, mostra planejado x realizado.
+    # Se esta atividade faz parte de um treino prescrito, mostra planejado x
+    # realizado — comparando contra a SESSÃO inteira (soma dos blocos do dia),
+    # não só este pedaço.
     planned = activity.planned_workouts.first()
-    adherence = metrics.adherence(planned, activity) if planned else None
+    adherence = metrics.adherence(planned, planned.realized) if planned else None
     return render(request, "runner/activity_detail.html", {
         "activity": activity,
         "planned": planned,

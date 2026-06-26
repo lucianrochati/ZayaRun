@@ -74,12 +74,17 @@ class PlannedWorkoutAdmin(admin.ModelAdmin):
         "title",
         "status",
         "source",
-        "matched_activity",
+        "matched_count",
     )
     list_filter = ("status", "workout_type", "source")
     search_fields = ("athlete__username", "title")
     date_hierarchy = "date"
-    raw_id_fields = ("matched_activity", "plan")
+    raw_id_fields = ("plan",)
+    filter_horizontal = ("matched_activities",)
+
+    @admin.display(description="Atividades")
+    def matched_count(self, obj):
+        return obj.matched_activities.count()
 
 
 @admin.register(WorkoutFeedback)
