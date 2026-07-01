@@ -30,6 +30,10 @@ REQUEST_TIMEOUT = 20
 class StravaError(Exception):
     """Erro ao falar com a API da Strava."""
 
+    def __init__(self, message, status_code=None):
+        super().__init__(message)
+        self.status_code = status_code
+
 
 def is_configured():
     return bool(settings.STRAVA_CLIENT_ID and settings.STRAVA_CLIENT_SECRET)
@@ -185,10 +189,18 @@ def _get(token, path, params=None):
         timeout=REQUEST_TIMEOUT,
     )
     if resp.status_code == 429:
-        raise StravaError("Limite de requisicoes da Strava atingido. Tente em alguns minutos.")
+        raise StravaError(
+            "Limite de requisicoes da Strava atingido. Tente em alguns minutos.",
+            status_code=429,
+        )
     if resp.status_code != 200:
-        logger.error("Erro Strava GET %s: %s", path, resp.text)
-        raise StravaError("Erro ao buscar dados na Strava.")
+        logger.error(
+            "Erro Strava GET %s -> HTTP %s: %s", path, resp.status_code, resp.text
+        )
+        raise StravaError(
+            f"Erro ao buscar dados na Strava (HTTP {resp.status_code}).",
+            status_code=resp.status_code,
+        )
     return resp.json()
 
 
